@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WallaPic - Escribe a través de la imagen</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header con logo y controles -->
+        <header class="header">
+            <h1 class="logo">WallaPic</h1>
+            <div class="header-controls">
+                <div id="streakDisplay" class="streak-display" title="Racha de días consecutivos">
+                    <svg class="streak-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                        <path d="M13.5 2C13.5 2 15 4.5 15 7C15 8.5 14 9.5 13 10C13.5 9.5 14 8.5 14 7.5C14 6 13 4.5 12 3C11 4.5 10 6 10 7.5C10 8.5 10.5 9.5 11 10C10 9.5 9 8.5 9 7C9 4.5 10.5 2 10.5 2C8 4 6 7 6 11C6 15.5 9 19 13 19C17 19 20 15.5 20 11C20 7 18 4 15.5 2C15.5 2 15 3 15 4.5C15 6 14.5 7 13.5 7.5C14 7 14.5 6 14.5 4.5C14.5 3 13.5 2 13.5 2Z"/>
+                    </svg>
+                    <span id="streakCount" class="streak-count">0</span>
+                    <span class="streak-label">días</span>
+                </div>
+                <button id="historyBtn" class="btn-secondary" title="Ver historial">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Contenedor principal -->
+        <main class="main-container">
+            <!-- Sección de imagen -->
+            <section class="image-section" id="imageSection">
+                <div class="image-container">
+                    <div class="image-wrapper">
+                        <img id="mainImage" src="" alt="Imagen del día" class="main-image">
+                        <button id="pinBtn" class="pin-btn" title="Marcar imagen">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 17v5"></path>
+                                <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path>
+                            </svg>
+                        </button>
+                        <button id="downloadBtn" class="download-btn" title="Descargar imagen">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="image-loader" id="imageLoader">
+                        <div class="spinner"></div>
+                        <p>Cargando imagen...</p>
+                    </div>
+                    
+                    <!-- Cinta de imágenes marcadas -->
+                    <div class="pinned-ribbon" id="pinnedRibbon"></div>
+                    
+                    <div class="image-credit" id="imageCredit">
+                        <div class="image-controls">
+                            <button id="changeImageBtn" class="change-image-btn" title="Cambiar imagen">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                                </svg>
+                            </button>
+                            <button id="categoryBtn" class="category-btn" title="Categorías">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 12h18M3 6h18M3 18h18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="image-credit-text"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sección de escritura -->
+            <section class="writing-section">
+                <!-- Panel lateral derecho -->
+                <aside class="sidebar-right">
+                    <button class="sidebar-btn" id="profileBtn" title="Perfil">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </button>
+                    <button class="sidebar-btn" id="statsBtn" title="Estadísticas">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="20" x2="12" y2="10"></line>
+                            <line x1="18" y1="20" x2="18" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="16"></line>
+                        </svg>
+                    </button>
+                    <button class="sidebar-btn" id="imageBankBtn" title="Mi banco de imágenes">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                    </button>
+                    <button class="sidebar-btn" id="dictionaryBtn" title="Diccionario">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        </svg>
+                    </button>
+                    <button class="sidebar-btn" id="settingsBtn" title="Configuración">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </aside>
+
+                <!-- Selector de mood -->
+                <div class="mood-selector" id="moodSelector">
+                    <p class="mood-label">¿Cómo llegas hoy?</p>
+                    <div class="mood-options">
+                        <button class="mood-btn" data-mood="tranquilo" title="Tranquilo">
+                            <span class="mood-icon">😌</span>
+                        </button>
+                        <button class="mood-btn" data-mood="nostalgico" title="Nostálgico">
+                            <span class="mood-icon">🌅</span>
+                        </button>
+                        <button class="mood-btn" data-mood="inquieto" title="Inquieto">
+                            <span class="mood-icon">⚡</span>
+                        </button>
+                        <button class="mood-btn" data-mood="inspirado" title="Inspirado">
+                            <span class="mood-icon">✨</span>
+                        </button>
+                        <button class="mood-btn" data-mood="cansado" title="Cansado">
+                            <span class="mood-icon">😴</span>
+                        </button>
+                        <button class="mood-btn" data-mood="alegre" title="Alegre">
+                            <span class="mood-icon">😊</span>
+                        </button>
+                        <button class="mood-btn" data-mood="melancolico" title="Melancólico">
+                            <span class="mood-icon">🌧️</span>
+                        </button>
+                        <button class="mood-btn" data-mood="neutro" title="Neutro">
+                            <span class="mood-icon">😐</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Área de texto -->
+                <div class="text-area-container">
+                    <textarea 
+                        id="writingArea" 
+                        class="writing-area" 
+                        placeholder="Escribe aquí... La imagen es el umbral, no el tema."
+                        disabled
+                    ></textarea>
+                    <div class="writing-stats">
+                        <span id="wordCount">0 palabras</span>
+                    </div>
+                </div>
+
+                <!-- Campo de título -->
+                <div class="title-container">
+                    <input 
+                        type="text" 
+                        id="titleInput" 
+                        class="title-input" 
+                        placeholder="Título (opcional)"
+                        disabled
+                    />
+                </div>
+
+                <!-- Reto del día -->
+                <div class="word-challenge-container">
+                    <button class="word-challenge" id="wordChallenge">
+                        <svg class="challenge-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="6"></circle>
+                            <circle cx="12" cy="12" r="2"></circle>
+                        </svg>
+                        <span class="challenge-text">
+                            Reto de hoy: Usa la palabra <span id="wordText" class="challenge-word">---</span>
+                        </span>
+                    </button>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="action-buttons">
+                    <div class="action-buttons-left">
+                        <button id="saveBtn" class="btn-primary" disabled>
+                            Guardar entrada
+                        </button>
+                        <button id="autoSaveBtn" class="btn-autosave" title="Bloquear borrador">
+                            <svg id="lockIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Botón de limpiar (posicionado junto a sidebar) -->
+        <button id="clearBtn" class="btn-clear" title="Limpiar y empezar de cero">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
+
+        <!-- Modal de historial -->
+        <div id="historyModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Tu archivo personal</h2>
+                    <button id="closeHistoryBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body" id="historyList">
+                    <!-- El contenido se genera dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de entrada guardada -->
+        <div id="entryModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button id="closeEntryBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body" id="entryDetails">
+                    <!-- El contenido se genera dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de categorías -->
+        <div id="categoryModal" class="modal">
+            <div class="modal-content category-modal">
+                <div class="modal-header">
+                    <h2>Categorías</h2>
+                    <button id="closeCategoryBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="category-grid" id="categoryGrid">
+                        <!-- Se genera dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de definición de palabra -->
+        <div id="wordModal" class="modal">
+            <div class="modal-content word-modal">
+                <div class="modal-header">
+                    <h2 id="wordModalTitle">Palabra</h2>
+                    <button id="closeWordBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body" id="wordModalBody">
+                    <!-- Se genera dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de diccionario (palabras aprendidas) -->
+        <div id="dictionaryModal" class="modal">
+            <div class="modal-content dictionary-modal">
+                <div class="modal-header">
+                    <h2>Mi Diccionario</h2>
+                    <button id="closeDictionaryBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="dictionaryContent">
+                        <!-- Se genera dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confetti canvas -->
+    <canvas id="confettiCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999;"></canvas>
+
+    <script src="dictionary.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
