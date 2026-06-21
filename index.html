@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WallaPic - Escribe a través de la imagen</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="circles-styles.css">
 </head>
 <body>
     <div id="app">
@@ -19,9 +20,12 @@
                     <span id="streakCount" class="streak-count">0</span>
                     <span class="streak-label">días</span>
                 </div>
-                <button id="historyBtn" class="btn-secondary" title="Ver historial">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+                <button id="historyBtn" class="btn-secondary" title="Feed Público">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="4" y1="9" x2="20" y2="9"></line>
+                        <line x1="4" y1="15" x2="20" y2="15"></line>
+                        <line x1="10" y1="3" x2="8" y2="21"></line>
+                        <line x1="16" y1="3" x2="14" y2="21"></line>
                     </svg>
                 </button>
             </div>
@@ -85,24 +89,37 @@
                             <circle cx="12" cy="7" r="4"></circle>
                         </svg>
                     </button>
-                    <button class="sidebar-btn" id="statsBtn" title="Estadísticas">
+                    <button class="sidebar-btn" id="archiveBtn" title="Mi Archivo">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="20" x2="12" y2="10"></line>
-                            <line x1="18" y1="20" x2="18" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="16"></line>
-                        </svg>
-                    </button>
-                    <button class="sidebar-btn" id="imageBankBtn" title="Mi banco de imágenes">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                            <polyline points="21 15 16 10 5 21"></polyline>
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                         </svg>
                     </button>
                     <button class="sidebar-btn" id="dictionaryBtn" title="Diccionario">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
                             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        </svg>
+                    </button>
+                    <button class="sidebar-btn" id="imageBankBtn" title="Mi Banco de Imágenes">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                    </button>
+                    <button class="sidebar-btn" id="circlesBtn" title="Círculos Sociales">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </button>
+                    <button class="sidebar-btn" id="statsBtn" title="Estadísticas">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="20" x2="12" y2="10"></line>
+                            <line x1="18" y1="20" x2="18" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="16"></line>
                         </svg>
                     </button>
                     <button class="sidebar-btn" id="settingsBtn" title="Configuración">
@@ -117,43 +134,31 @@
                 <div class="mood-selector" id="moodSelector">
                     <p class="mood-label">¿Cómo llegas hoy?</p>
                     <div class="mood-options">
-                        <button class="mood-btn" data-mood="tranquilo" title="Tranquilo">
-                            <span class="mood-icon">😌</span>
+                        <button class="mood-btn" data-mood="reflexivo" title="Reflexivo">
+                            <span class="mood-icon">🤔</span>
+                        </button>
+                        <button class="mood-btn" data-mood="poderoso" title="Poderoso">
+                            <span class="mood-icon">💪</span>
                         </button>
                         <button class="mood-btn" data-mood="nostalgico" title="Nostálgico">
-                            <span class="mood-icon">🌅</span>
-                        </button>
-                        <button class="mood-btn" data-mood="inquieto" title="Inquieto">
-                            <span class="mood-icon">⚡</span>
-                        </button>
-                        <button class="mood-btn" data-mood="inspirado" title="Inspirado">
-                            <span class="mood-icon">✨</span>
+                            <span class="mood-icon">🕰️</span>
                         </button>
                         <button class="mood-btn" data-mood="cansado" title="Cansado">
                             <span class="mood-icon">😴</span>
                         </button>
+                        <button class="mood-btn" data-mood="inspirado" title="Inspirado">
+                            <span class="mood-icon">✨</span>
+                        </button>
                         <button class="mood-btn" data-mood="alegre" title="Alegre">
                             <span class="mood-icon">😊</span>
+                        </button>
+                        <button class="mood-btn" data-mood="inquieto" title="Inquieto">
+                            <span class="mood-icon">😰</span>
                         </button>
                         <button class="mood-btn" data-mood="melancolico" title="Melancólico">
                             <span class="mood-icon">🌧️</span>
                         </button>
-                        <button class="mood-btn" data-mood="neutro" title="Neutro">
-                            <span class="mood-icon">😐</span>
                         </button>
-                    </div>
-                </div>
-
-                <!-- Área de texto -->
-                <div class="text-area-container">
-                    <textarea 
-                        id="writingArea" 
-                        class="writing-area" 
-                        placeholder="Escribe aquí... La imagen es el umbral, no el tema."
-                        disabled
-                    ></textarea>
-                    <div class="writing-stats">
-                        <span id="wordCount">0 palabras</span>
                     </div>
                 </div>
 
@@ -168,18 +173,24 @@
                     />
                 </div>
 
+                <!-- Área de texto -->
+                <div class="text-area-container">
+                    <textarea 
+                        id="writingArea" 
+                        class="writing-area" 
+                        placeholder="Selecciona un mood primero"
+                        disabled
+                    ></textarea>
+                    <div class="writing-stats">
+                        <span id="wordCount">0 palabras</span>
+                    </div>
+                </div>
+
                 <!-- Reto del día -->
                 <div class="word-challenge-container">
-                    <button class="word-challenge" id="wordChallenge">
-                        <svg class="challenge-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <circle cx="12" cy="12" r="6"></circle>
-                            <circle cx="12" cy="12" r="2"></circle>
-                        </svg>
-                        <span class="challenge-text">
-                            Reto de hoy: Usa la palabra <span id="wordText" class="challenge-word">---</span>
-                        </span>
-                    </button>
+                    <div class="word-challenge" id="wordChallenge">
+                        <!-- El contenido se genera dinámicamente según la variación del día -->
+                    </div>
                 </div>
 
                 <!-- Botones de acción -->
@@ -194,27 +205,160 @@
                                 <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
                             </svg>
                         </button>
+                        <button id="clearBtn" class="btn-clear" title="Limpiar">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path>
+                                <path d="M22 21H7"></path>
+                                <path d="m5 11 9 9"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </section>
         </main>
 
-        <!-- Botón de limpiar (posicionado junto a sidebar) -->
-        <button id="clearBtn" class="btn-clear" title="Limpiar y empezar de cero">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-        </button>
-
-        <!-- Modal de historial -->
+        <!-- Modal de historial (Feed Público) -->
         <div id="historyModal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Tu archivo personal</h2>
+                    <h2>Feed Público</h2>
                     <button id="closeHistoryBtn" class="btn-close">&times;</button>
                 </div>
                 <div class="modal-body" id="historyList">
+                    <!-- El contenido se genera dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de archivo personal -->
+        <div id="archiveModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Mi Archivo Personal</h2>
+                    <button id="closeArchiveBtn" class="btn-close">&times;</button>
+                </div>
+                
+                <!-- Tabs de archivo -->
+                <div class="archive-tabs">
+                    <button class="archive-tab active" data-tab="entries">Mis Entradas</button>
+                    <button class="archive-tab" data-tab="favorites" id="favoritesTab" style="display: none;">Favoritos</button>
+                    <button class="archive-tab" data-tab="archived" id="archivedTab" style="display: none;">Archivados</button>
+                    <button class="archive-tab" data-tab="collections">Colecciones</button>
+                </div>
+                
+                <!-- Controles de archivo -->
+                <div class="archive-controls">
+                    <!-- Buscador -->
+                    <div class="archive-search">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <input type="text" id="archiveSearchInput" placeholder="Buscar en tus entradas..." />
+                        <button id="clearSearchBtn" class="clear-search-btn" style="display: none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Filtros -->
+                    <div class="archive-filters">
+                        <button class="archive-filter-btn" id="moodFilterBtn" title="Filtrar por mood">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                                <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                                <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                            </svg>
+                            <span id="moodFilterCount"></span>
+                        </button>
+                        
+                        <button class="archive-filter-btn" id="lengthFilterBtn" title="Ordenar por longitud">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="21" y1="10" x2="3" y2="10"></line>
+                                <line x1="21" y1="6" x2="7" y2="6"></line>
+                                <line x1="21" y1="14" x2="3" y2="14"></line>
+                                <line x1="21" y1="18" x2="7" y2="18"></line>
+                            </svg>
+                            <span id="lengthFilterIcon" style="display: none; margin-left: 0.25rem;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path id="lengthArrowPath" d="M12 5v14M19 12l-7 7-7-7"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        
+                        <button class="archive-filter-btn" id="sortBtn" title="Ordenar por fecha">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="4" y1="6" x2="16" y2="6"></line>
+                                <line x1="4" y1="12" x2="16" y2="12"></line>
+                                <line x1="4" y1="18" x2="10" y2="18"></line>
+                                <polyline points="16 2 20 6 16 10"></polyline>
+                            </svg>
+                        </button>
+                        
+                        <div class="archive-view-switcher">
+                            <button class="view-btn active" data-view="list" title="Vista lista">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                                </svg>
+                            </button>
+                            <button class="view-btn" data-view="grid" title="Vista grid">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                </svg>
+                            </button>
+                            <button class="view-btn" data-view="calendar" title="Vista calendario">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </button>
+                            <button class="view-btn" data-view="heatmap" title="Heatmap">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <path d="M3 9h18M3 15h18M9 3v18M15 3v18"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filtro de moods (dropdown) -->
+                <div class="mood-filter-dropdown" id="moodFilterDropdown" style="display: none;">
+                    <div class="mood-filter-grid">
+                        <!-- Se genera dinámicamente con solo los moods usados -->
+                    </div>
+                </div>
+                
+                <!-- Menú de ordenamiento -->
+                <div class="sort-dropdown" id="sortDropdown" style="display: none;">
+                    <button class="sort-option active" data-sort="newest">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5v14M19 12l-7 7-7-7"></path>
+                        </svg>
+                        <span>Más recientes</span>
+                    </button>
+                    <button class="sort-option" data-sort="oldest">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 19V5M5 12l7-7 7 7"></path>
+                        </svg>
+                        <span>Más antiguos</span>
+                    </button>
+                </div>
+                
+                <div class="modal-body" id="archiveList">
                     <!-- El contenido se genera dinámicamente -->
                 </div>
             </div>
@@ -260,6 +404,19 @@
             </div>
         </div>
 
+        <!-- Modal de confirmación minimalista -->
+<div id="confirmModal" class="modal">
+            <div class="modal-content confirm-modal">
+                <div class="confirm-modal-body">
+                    <p id="confirmMessage"></p>
+                    <div class="confirm-actions">
+                        <button id="confirmCancelBtn" class="confirm-btn confirm-btn-cancel">Cancelar</button>
+                        <button id="confirmOkBtn" class="confirm-btn confirm-btn-ok">Confirmar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal de diccionario (palabras aprendidas) -->
         <div id="dictionaryModal" class="modal">
             <div class="modal-content dictionary-modal">
@@ -274,6 +431,104 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modal de Login/Registro -->
+        <div id="authModal" class="modal">
+            <div class="modal-content auth-modal">
+                <div class="modal-header">
+                    <h2 id="authModalTitle">Iniciar Sesión</h2>
+                    <button id="closeAuthBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="authContent">
+                        <div id="authError" class="auth-error"></div>
+                        <div id="authSuccess" class="auth-success"></div>
+                        <form id="authForm" onsubmit="return false;">
+                            <div class="form-group">
+                                <label for="authUsername">Usuario</label>
+                                <input type="text" id="authUsername" class="form-input" placeholder="nombre_usuario" required autocomplete="username">
+                            </div>
+                            <div class="form-group">
+                                <label for="authPassword">Contraseña</label>
+                                <input type="password" id="authPassword" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+                            </div>
+                            <div class="auth-buttons">
+                                <button type="button" id="loginBtn" class="btn-primary">Entrar</button>
+                                <button type="button" id="registerBtn" class="btn-secondary">Crear</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Perfil -->
+        <div id="profileModal" class="modal">
+            <div class="modal-content profile-modal">
+                <div class="modal-header">
+                    <h2>Perfil</h2>
+                    <button id="closeProfileBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="profileContent">
+                        <!-- Se genera dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Detalle de Badge -->
+        <div id="badgeDetailModal" class="modal">
+            <div class="modal-content badge-detail-modal">
+                <div class="modal-body">
+                    <div id="badgeDetailContent">
+                        <!-- Se genera dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Confirmación de Limpieza -->
+        <div id="clearConfirmModal" class="modal">
+            <div class="modal-content clear-confirm-modal">
+                <div class="modal-header">
+                    <h2>¿Limpiar contenido?</h2>
+                    <button class="btn-close" onclick="closeClearConfirmModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 1.5rem; font-size: 0.9rem;">Selecciona qué deseas limpiar:</p>
+                    <div class="clear-options">
+                        <button class="clear-option-btn" onclick="confirmClear('text')">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 7h16M10 11v6M14 11v6M5 7l1 12c0 1 1 2 2 2h8c1 0 2-1 2-2l1-12M9 7V4h6v3"/>
+                            </svg>
+                            <span>Solo texto</span>
+                        </button>
+                        <button class="clear-option-btn danger" onclick="confirmClear('all')">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                            </svg>
+                            <span>Limpiar todo</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Estadísticas -->
+        <div id="statsModal" class="modal">
+            <div class="modal-content stats-modal">
+                <div class="modal-header">
+                    <h2>Estadísticas</h2>
+                    <button id="closeStatsBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="statsContent">
+                        <!-- Se genera dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Confetti canvas -->
@@ -282,8 +537,20 @@
     <!-- Supabase (para sincronización en la nube - opcional) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
+    <script src="storage-manager.js"></script>
+    <script src="supabase-auth.js"></script>
 
+    <script src="streak-system.js"></script>
+    <script src="challenges-level2.js"></script>
+    <script src="challenges-level3.js"></script>
+    <script src="challenge-variations.js"></script>
+    <script src="stats-panel.js"></script>
     <script src="dictionary.js"></script>
+    <script src="badge-system.js"></script>
+    <script src="badges-ui.js"></script>
+    <script src="archive-manager.js"></script>
+    <script src="circles-manager.js"></script>
+    <script src="circles-ui.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
