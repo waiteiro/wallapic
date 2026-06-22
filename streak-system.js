@@ -2,6 +2,38 @@
 // SISTEMA DE RACHAS Y NIVELES
 // ============================================
 
+// Obtener mejor racha histórica del usuario
+function getBestStreak() {
+    try {
+        const stored = localStorage.getItem('wallapic_best_streak');
+        return stored ? parseInt(stored) : 0;
+    } catch (error) {
+        console.error('Error cargando mejor racha:', error);
+        return 0;
+    }
+}
+
+// Actualizar mejor racha si la actual es mayor
+async function updateBestStreak(currentStreak) {
+    const bestStreak = getBestStreak();
+    if (currentStreak > bestStreak) {
+        try {
+            localStorage.setItem('wallapic_best_streak', currentStreak.toString());
+            
+            // Sincronizar con Supabase si hay sesión
+            if (typeof window.storageManager !== 'undefined') {
+                await window.storageManager.saveBestStreak(currentStreak);
+            }
+            
+            console.log(`🏆 Nuevo récord de racha: ${currentStreak} días`);
+            return true; // Indica que se alcanzó nuevo récord
+        } catch (error) {
+            console.error('Error guardando mejor racha:', error);
+        }
+    }
+    return false;
+}
+
 // Definición completa de niveles de racha
 const STREAK_LEVELS = [
     {
@@ -288,9 +320,11 @@ function getLevelProgress(streakDays) {
     return Math.min(Math.round(progress), 100);
 }
 
-// Verificar si una categoría está desbloqueada
+// Verificar si una categoría está desbloqueada (basado en MEJOR racha histórica)
 function isCategoryUnlocked(categoryId, streakDays) {
-    const currentLevel = getCurrentLevel(streakDays);
+    // Usar la mejor racha alcanzada, no la actual
+    const bestStreak = Math.max(getBestStreak(), streakDays);
+    const currentLevel = getCurrentLevel(bestStreak);
     
     if (currentLevel.unlocks.categories === "all") {
         return true;
@@ -299,9 +333,11 @@ function isCategoryUnlocked(categoryId, streakDays) {
     return currentLevel.unlocks.categories.includes(categoryId);
 }
 
-// Obtener todas las categorías desbloqueadas
+// Obtener todas las categorías desbloqueadas (basado en MEJOR racha histórica)
 function getUnlockedCategories(streakDays) {
-    const currentLevel = getCurrentLevel(streakDays);
+    // Usar la mejor racha alcanzada, no la actual
+    const bestStreak = Math.max(getBestStreak(), streakDays);
+    const currentLevel = getCurrentLevel(bestStreak);
     
     if (currentLevel.unlocks.categories === "all") {
         return IMAGE_CATEGORIES.map(cat => cat.id);
@@ -316,9 +352,11 @@ function areChallengesLevel2Enabled(streakDays) {
     return streakDays >= 7;
 }
 
-// Verificar si el panel de estadísticas está desbloqueado
+// Verificar si el panel de estadísticas está desbloqueado (permanente una vez alcanzado)
 function isStatsUnlocked(streakDays) {
-    const currentLevel = getCurrentLevel(streakDays);
+    // Usar la mejor racha alcanzada
+    const bestStreak = Math.max(getBestStreak(), streakDays);
+    const currentLevel = getCurrentLevel(bestStreak);
     return currentLevel.unlocks.stats;
 }
 
@@ -379,7 +417,16 @@ function renderStreakLevel() {
         tooltipText += '\n¡Nivel máximo alcanzado!';
     }
     
+    if (streak >= 1) {
+        tooltipText += '\n\nClick para ver tu torre 3D';
+    }
+    
     streakDisplay.title = tooltipText;
+    
+    // Actualizar cursor del viewer 3D
+    if (window.streak3DViewer) {
+        window.streak3DViewer.updateStreakCursor();
+    }
 }
 
 // Exportar funciones globales
@@ -394,7 +441,9 @@ window.streakSystem = {
     isStatsUnlocked,
     getCurrentBadge,
     getAllUnlockedBadges,
-    renderStreakLevel
+    renderStreakLevel,
+    getBestStreak,
+    updateBestStreak
 };
 
 console.log('✅ Sistema de rachas inicializado');

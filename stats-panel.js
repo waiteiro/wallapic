@@ -159,7 +159,7 @@ async function renderStatsPanel() {
                 <div class="stat-card">
                     <div class="stat-icon">${getMoodIcon(stats.favoriteMood)}</div>
                     <div class="stat-value">${stats.favoriteMood}</div>
-                    <div class="stat-label">Mood Favorito</div>
+                    <div class="stat-label">Mood Frecuente</div>
                 </div>
                 
                 <div class="stat-card">

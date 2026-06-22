@@ -1,6 +1,6 @@
 // ========================================
 // CÍRCULOS MANAGER
-// Sistema de círculos privados donde usuarios comparten entradas
+// Sistema de círculos privados con ejercicios de imagen compartida
 // ========================================
 
 class CirclesManager {
@@ -27,6 +27,23 @@ class CirclesManager {
     async createCircle(name, description, coverColor = '#6366f1', maxMembers = 10) {
         if (!this.currentUserId) {
             throw new Error('Usuario no autenticado');
+        }
+
+        // Validar límite de 12 miembros máximo
+        if (maxMembers > 12) {
+            throw new Error('Un círculo puede tener máximo 12 miembros');
+        }
+
+        // Verificar límite de círculos creados (máximo 10)
+        const { data: ownedCircles, error: countError } = await supabaseClient
+            .from('circles')
+            .select('id')
+            .eq('creator_id', this.currentUserId);
+
+        if (countError) throw countError;
+
+        if (ownedCircles && ownedCircles.length >= 10) {
+            throw new Error('Has alcanzado el límite de 10 círculos creados');
         }
 
         // Crear círculo
@@ -93,15 +110,8 @@ class CirclesManager {
 
         if (membersError) throw membersError;
 
-        // Obtener imagen de la semana actual
-        const weekId = this.getCurrentWeekId();
-        const { data: weekImage } = await supabaseClient
-            .from('circle_weekly_entries')
-            .select('image')
-            .eq('circle_id', circleId)
-            .eq('week_id', weekId)
-            .limit(1)
-            .single();
+        // Obtener ejercicio activo
+        const activeChallenge = await this.getActiveChallenge(circleId);
 
         return {
             ...circle,
@@ -112,29 +122,8 @@ class CirclesManager {
                 role: m.role,
                 joinedAt: m.joined_at
             })),
-            weekImage: weekImage?.image || null
+            activeChallenge
         };
-    }
-
-    async updateCircle(circleId, updates) {
-        const { data, error } = await supabaseClient
-            .from('circles')
-            .update(updates)
-            .eq('id', circleId)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    }
-
-    async deleteCircle(circleId) {
-        const { error } = await supabaseClient
-            .from('circles')
-            .delete()
-            .eq('id', circleId);
-
-        if (error) throw error;
     }
 
     async leaveCircle(circleId) {
@@ -150,6 +139,28 @@ class CirclesManager {
     // ========================================
     // GESTIÓN DE INVITACIONES
     // ========================================
+
+    async getPendingInvitationsCount() {
+        if (!this.currentUserId || !this.currentUsername) return 0;
+
+        try {
+            const { data, error } = await supabaseClient
+                .from('circle_invitations')
+                .select('id')
+                .eq('invitee_username', this.currentUsername)
+                .eq('status', 'pending');
+
+            if (error) {
+                console.error('Error counting invitations:', error);
+                return 0;
+            }
+
+            return data ? data.length : 0;
+        } catch (error) {
+            console.error('Error counting invitations:', error);
+            return 0;
+        }
+    }
 
     async inviteUser(circleId, username) {
         if (!this.currentUserId) {
@@ -217,6 +228,56 @@ class CirclesManager {
 
         if (invError) throw invError;
 
+        // Si acepta, verificar límites antes de unirse
+        if (accept) {
+            // Verificar límite total de círculos (10 creados + 15 invitados = 25 total)
+            const { data: allMemberships, error: membershipError } = await supabaseClient
+                .from('circle_members')
+                .select('id')
+                .eq('user_id', this.currentUserId);
+
+            if (membershipError) throw membershipError;
+
+            if (allMemberships && allMemberships.length >= 25) {
+                throw new Error('Has alcanzado el límite de 25 círculos (10 creados + 15 como invitado)');
+            }
+
+            // Verificar límite de círculos como invitado (15)
+            const { data: ownedCircles, error: ownedError } = await supabaseClient
+                .from('circles')
+                .select('id')
+                .eq('creator_id', this.currentUserId);
+
+            if (ownedError) throw ownedError;
+
+            const ownedCount = ownedCircles ? ownedCircles.length : 0;
+            const invitedCount = allMemberships.length - ownedCount;
+
+            if (invitedCount >= 15) {
+                throw new Error('Has alcanzado el límite de 15 círculos como invitado');
+            }
+
+            // Verificar que el círculo no esté lleno
+            const { data: circleMembers, error: circleMembersError } = await supabaseClient
+                .from('circle_members')
+                .select('id')
+                .eq('circle_id', invitation.circle_id);
+
+            if (circleMembersError) throw circleMembersError;
+
+            const { data: circleInfo, error: circleInfoError } = await supabaseClient
+                .from('circles')
+                .select('max_members')
+                .eq('id', invitation.circle_id)
+                .single();
+
+            if (circleInfoError) throw circleInfoError;
+
+            if (circleMembers && circleMembers.length >= circleInfo.max_members) {
+                throw new Error('El círculo está lleno');
+            }
+        }
+
         // Actualizar estado
         const { error: updateError } = await supabaseClient
             .from('circle_invitations')
@@ -243,51 +304,72 @@ class CirclesManager {
     }
 
     // ========================================
-    // GESTIÓN DE ENTRADAS SEMANALES
+    // GESTIÓN DE EJERCICIOS DE IMAGEN
     // ========================================
 
-    getCurrentWeekId() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const startOfYear = new Date(year, 0, 1);
-        const days = Math.floor((now - startOfYear) / (24 * 60 * 60 * 1000));
-        const week = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-        return `${year}-${week.toString().padStart(2, '0')}`;
-    }
-
-    async getWeekImageForCircle(circleId) {
-        const weekId = this.getCurrentWeekId();
-        
-        // Verificar si ya hay una imagen para esta semana
+    async getActiveChallenge(circleId) {
         const { data, error } = await supabaseClient
-            .from('circle_weekly_entries')
-            .select('image')
+            .from('circle_challenges')
+            .select('*')
             .eq('circle_id', circleId)
-            .eq('week_id', weekId)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
             .limit(1)
             .single();
 
         if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
-        return data?.image || null;
+        return data || null;
     }
 
-    async submitWeeklyEntry(circleId, image, title, text) {
+    async proposeChallenge(circleId, image) {
         if (!this.currentUserId) {
             throw new Error('Usuario no autenticado');
         }
 
-        const weekId = this.getCurrentWeekId();
+        // Verificar que no haya un ejercicio activo
+        const activeChallenge = await this.getActiveChallenge(circleId);
+        if (activeChallenge) {
+            throw new Error('Ya hay un ejercicio activo en este círculo');
+        }
+
+        // Crear nuevo ejercicio (deadline: 24 horas)
+        const deadline = new Date();
+        deadline.setHours(deadline.getHours() + 24);
 
         const { data, error } = await supabaseClient
-            .from('circle_weekly_entries')
+            .from('circle_challenges')
             .insert([{
+                circle_id: circleId,
+                proposed_by_user_id: this.currentUserId,
+                proposed_by_username: this.currentUsername,
+                image,
+                status: 'active',
+                deadline: deadline.toISOString()
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    async submitChallengeEntry(challengeId, circleId, title, text) {
+        if (!this.currentUserId) {
+            throw new Error('Usuario no autenticado');
+        }
+
+        const wordCount = text.trim().split(/\s+/).length;
+
+        const { data, error } = await supabaseClient
+            .from('circle_challenge_entries')
+            .insert([{
+                challenge_id: challengeId,
                 circle_id: circleId,
                 user_id: this.currentUserId,
                 username: this.currentUsername,
-                week_id: weekId,
-                image,
                 title,
-                text
+                text,
+                word_count: wordCount
             }])
             .select()
             .single();
@@ -295,41 +377,47 @@ class CirclesManager {
         if (error) throw error;
 
         // Verificar si todos completaron para revelar
-        await this.checkAndRevealEntries(circleId, weekId);
+        await this.checkAndRevealEntries(challengeId, circleId);
 
         return data;
     }
 
-    async getWeeklyEntries(circleId, weekId = null) {
-        if (!weekId) weekId = this.getCurrentWeekId();
+    async hasUserSubmittedChallenge(challengeId) {
+        if (!this.currentUserId) return false;
 
         const { data, error } = await supabaseClient
-            .from('circle_weekly_entries')
+            .from('circle_challenge_entries')
+            .select('id')
+            .eq('challenge_id', challengeId)
+            .eq('user_id', this.currentUserId)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+        return !!data;
+    }
+
+    async getChallengeEntries(challengeId) {
+        const { data, error } = await supabaseClient
+            .from('circle_challenge_entries')
             .select('*')
-            .eq('circle_id', circleId)
-            .eq('week_id', weekId)
+            .eq('challenge_id', challengeId)
             .order('created_at', { ascending: true });
 
         if (error) throw error;
 
-        // Obtener likes y comentarios para cada entrada
+        // Obtener likes para cada entrada
         const entries = await Promise.all(data.map(async entry => {
-            const [likes, comments] = await Promise.all([
-                this.getEntryLikes(entry.id),
-                this.getEntryComments(entry.id)
-            ]);
-
+            const likes = await this.getEntryLikes(entry.id);
             return {
                 ...entry,
-                likes,
-                comments
+                likes
             };
         }));
 
         return entries;
     }
 
-    async checkAndRevealEntries(circleId, weekId) {
+    async checkAndRevealEntries(challengeId, circleId) {
         // Obtener número de miembros
         const { data: members, error: membersError } = await supabaseClient
             .from('circle_members')
@@ -340,52 +428,50 @@ class CirclesManager {
 
         // Obtener número de entradas completadas
         const { data: entries, error: entriesError } = await supabaseClient
-            .from('circle_weekly_entries')
+            .from('circle_challenge_entries')
             .select('id')
-            .eq('circle_id', circleId)
-            .eq('week_id', weekId);
+            .eq('challenge_id', challengeId);
 
         if (entriesError) throw entriesError;
 
-        // Si todos completaron o es después de medianoche, revelar
+        // Obtener info del challenge
+        const { data: challenge, error: challengeError } = await supabaseClient
+            .from('circle_challenges')
+            .select('deadline')
+            .eq('id', challengeId)
+            .single();
+
+        if (challengeError) throw challengeError;
+
+        // Si todos completaron o pasó el deadline, revelar
         const allCompleted = entries.length === members.length;
         const now = new Date();
-        const midnight = new Date(now);
-        midnight.setHours(24, 0, 0, 0);
-        const pastMidnight = now >= midnight;
+        const deadlinePassed = now >= new Date(challenge.deadline);
 
-        if (allCompleted || pastMidnight) {
-            const { error } = await supabaseClient
-                .from('circle_weekly_entries')
+        if (allCompleted || deadlinePassed) {
+            // Revelar entradas
+            await supabaseClient
+                .from('circle_challenge_entries')
                 .update({ is_revealed: true })
-                .eq('circle_id', circleId)
-                .eq('week_id', weekId);
+                .eq('challenge_id', challengeId);
 
-            if (error) throw error;
+            // Marcar challenge como revelado
+            await supabaseClient
+                .from('circle_challenges')
+                .update({ 
+                    status: 'revealed',
+                    revealed_at: new Date().toISOString()
+                })
+                .eq('id', challengeId);
+
             return true;
         }
 
         return false;
     }
 
-    async hasUserSubmittedThisWeek(circleId) {
-        if (!this.currentUserId) return false;
-
-        const weekId = this.getCurrentWeekId();
-        const { data, error } = await supabaseClient
-            .from('circle_weekly_entries')
-            .select('id')
-            .eq('circle_id', circleId)
-            .eq('user_id', this.currentUserId)
-            .eq('week_id', weekId)
-            .single();
-
-        if (error && error.code !== 'PGRST116') throw error;
-        return !!data;
-    }
-
     // ========================================
-    // LIKES Y COMENTARIOS
+    // LIKES
     // ========================================
 
     async likeEntry(entryId) {
@@ -430,15 +516,19 @@ class CirclesManager {
         }));
     }
 
-    async addComment(entryId, comment) {
+    // ========================================
+    // COMENTARIOS GENERALES
+    // ========================================
+
+    async addChallengeComment(challengeId, comment) {
         if (!this.currentUserId) {
             throw new Error('Usuario no autenticado');
         }
 
         const { data, error } = await supabaseClient
-            .from('circle_entry_comments')
+            .from('circle_challenge_comments')
             .insert([{
-                entry_id: entryId,
+                challenge_id: challengeId,
                 user_id: this.currentUserId,
                 username: this.currentUsername,
                 comment
@@ -450,11 +540,11 @@ class CirclesManager {
         return data;
     }
 
-    async getEntryComments(entryId) {
+    async getChallengeComments(challengeId) {
         const { data, error } = await supabaseClient
-            .from('circle_entry_comments')
+            .from('circle_challenge_comments')
             .select('*')
-            .eq('entry_id', entryId)
+            .eq('challenge_id', challengeId)
             .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -463,60 +553,12 @@ class CirclesManager {
 
     async deleteComment(commentId) {
         const { error } = await supabaseClient
-            .from('circle_entry_comments')
+            .from('circle_challenge_comments')
             .delete()
             .eq('id', commentId)
             .eq('user_id', this.currentUserId);
 
         if (error) throw error;
-    }
-
-    // ========================================
-    // MIEMBROS
-    // ========================================
-
-    async removeMember(circleId, userId) {
-        const { error } = await supabaseClient
-            .from('circle_members')
-            .delete()
-            .eq('circle_id', circleId)
-            .eq('user_id', userId);
-
-        if (error) throw error;
-    }
-
-    async updateMemberRole(circleId, userId, role) {
-        const { error } = await supabaseClient
-            .from('circle_members')
-            .update({ role })
-            .eq('circle_id', circleId)
-            .eq('user_id', userId);
-
-        if (error) throw error;
-    }
-
-    async getCircleStats(circleId) {
-        const [members, entries] = await Promise.all([
-            supabaseClient
-                .from('circle_members')
-                .select('id')
-                .eq('circle_id', circleId),
-            supabaseClient
-                .from('circle_weekly_entries')
-                .select('id, week_id')
-                .eq('circle_id', circleId)
-        ]);
-
-        const weeklyCount = {};
-        entries.data?.forEach(e => {
-            weeklyCount[e.week_id] = (weeklyCount[e.week_id] || 0) + 1;
-        });
-
-        return {
-            memberCount: members.data?.length || 0,
-            totalEntries: entries.data?.length || 0,
-            weeklyStats: weeklyCount
-        };
     }
 }
 

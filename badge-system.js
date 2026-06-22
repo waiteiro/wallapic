@@ -63,25 +63,45 @@ const BADGE_CATALOG = {
     all_moods: { id: 'all_moods', name: 'Explorador Emocional', description: 'Usaste todos los moods', icon: '🎭', category: 'mood' },
     mood_alegre: { id: 'mood_alegre', name: 'Alma Alegre', description: '10 entradas con mood alegre', icon: '😊', category: 'mood' },
     mood_reflexivo: { id: 'mood_reflexivo', name: 'Alma Reflexiva', description: '10 entradas con mood reflexivo', icon: '🤔', category: 'mood' },
-    mood_melancolico: { id: 'mood_melancolico', name: 'Alma Melancólica', description: '10 entradas con mood melancólico', icon: '😔', category: 'mood' },
-    mood_energetico: { id: 'mood_energetico', name: 'Alma Energética', description: '10 entradas con mood energético', icon: '⚡', category: 'mood' },
-    mood_sereno: { id: 'mood_sereno', name: 'Alma Serena', description: '10 entradas con mood sereno', icon: '😌', category: 'mood' },
-    mood_caotico: { id: 'mood_caotico', name: 'Alma Caótica', description: '10 entradas con mood caótico', icon: '🌪️', category: 'mood' },
+    mood_melancolico: { id: 'mood_melancolico', name: 'Alma Melancólica', description: '10 entradas con mood melancólico', icon: '🌧️', category: 'mood' },
+    mood_poderoso: { id: 'mood_poderoso', name: 'Alma Poderosa', description: '10 entradas con mood poderoso', icon: '💪', category: 'mood' },
+    mood_nostalgico: { id: 'mood_nostalgico', name: 'Alma Nostálgica', description: '10 entradas con mood nostálgico', icon: '🕰️', category: 'mood' },
+    mood_cansado: { id: 'mood_cansado', name: 'Alma Cansada', description: '10 entradas con mood cansado', icon: '😴', category: 'mood' },
+    mood_inspirado: { id: 'mood_inspirado', name: 'Alma Inspirada', description: '10 entradas con mood inspirado', icon: '✨', category: 'mood' },
+    mood_inquieto: { id: 'mood_inquieto', name: 'Alma Inquieta', description: '10 entradas con mood inquieto', icon: '😰', category: 'mood' },
     
     // BADGES COMPUESTOS
     perfectionist: { id: 'perfectionist', name: 'Perfeccionista', description: '50 entradas + 100 palabras promedio', icon: '💯', category: 'special' },
     amateur_novelist: { id: 'amateur_novelist', name: 'Novelista Amateur', description: '10 entradas con +500 palabras', icon: '📝', category: 'special' },
     pro_novelist: { id: 'pro_novelist', name: 'Novelista Profesional', description: '10 entradas con +1000 palabras', icon: '✍️', category: 'special' },
     epic_entry: { id: 'epic_entry', name: 'Épico', description: 'Una entrada con +2000 palabras', icon: '📜', category: 'special' },
+    minimalist: { id: 'minimalist', name: 'Minimalista', description: '10 entradas con menos de 50 palabras', icon: '✂️', category: 'special' },
+    essayist: { id: 'essayist', name: 'Ensayista', description: '5 entradas con +1500 palabras', icon: '📄', category: 'special' },
+    epic_novelist: { id: 'epic_novelist', name: 'Novelista Épico', description: '3 entradas con +3000 palabras', icon: '📚', category: 'special' },
+    war_and_peace: { id: 'war_and_peace', name: 'Guerra y Paz', description: '1 entrada con +5000 palabras', icon: '📖', category: 'special' },
+    no_title_warrior: { id: 'no_title_warrior', name: 'Emisario sin Placa', description: '100 entradas sin título', icon: '🚫', category: 'special' },
     perfect_consistency: { id: 'perfect_consistency', name: 'Consistencia Impecable', description: '30 días consecutivos, 1 entrada/día', icon: '🎯', category: 'special' },
     extreme_productivity: { id: 'extreme_productivity', name: 'Productividad Extrema', description: '100 entradas en 30 días', icon: '🚀', category: 'special' },
     image_collector: { id: 'image_collector', name: 'Coleccionista de Imágenes', description: '50 imágenes marcadas', icon: '🖼️', category: 'special' },
+    image_hoarder: { id: 'image_hoarder', name: 'Acumulador', description: '100 imágenes en el banco personal', icon: '🖼️', category: 'special' },
     visual_eclectic: { id: 'visual_eclectic', name: 'Ecléctico Visual', description: 'Usaste todas las categorías', icon: '🎨', category: 'special' },
+    influencer: { id: 'influencer', name: 'Influencer', description: '50 entradas públicas', icon: '📢', category: 'visibility' },
     night_owl: { id: 'night_owl', name: 'Nocturno', description: '50 entradas entre 10 PM y 6 AM', icon: '🦉', category: 'special' },
     early_bird: { id: 'early_bird', name: 'Madrugador', description: '50 entradas entre 5 AM y 9 AM', icon: '🌅', category: 'special' },
+    lunch_hour: { id: 'lunch_hour', name: 'Hora del Almuerzo', description: '30 entradas entre 12 PM y 2 PM', icon: '🍽️', category: 'special' },
+    golden_hour: { id: 'golden_hour', name: 'Golden Hour', description: '25 entradas entre 6 PM y 8 PM', icon: '🌅', category: 'special' },
     renaissance: { id: 'renaissance', name: 'Renacentista', description: 'Todas las categorías + moods + 100 palabras', icon: '🎭', category: 'special' },
     speedster: { id: 'speedster', name: 'Velocista', description: '10 retos del timer en -3 min', icon: '⚡', category: 'special' },
-    slow_thinker: { id: 'slow_thinker', name: 'Pensador Lento', description: '10 retos del timer en +15 min', icon: '🐢', category: 'special' }
+    slow_thinker: { id: 'slow_thinker', name: 'Pensador Reflexivo', description: '10 retos del timer completados', icon: '🐢', category: 'special' },
+    
+    // BADGES DE VOLUMEN DE PALABRAS
+    wordsmith_10k: { id: 'wordsmith_10k', name: 'Verborrea', description: '10,000 palabras escritas en total', icon: '📝', category: 'volume' },
+    wordsmith_100k: { id: 'wordsmith_100k', name: 'Orador Incansable', description: '100,000 palabras escritas en total', icon: '🗣️', category: 'volume' },
+    wordsmith_500k: { id: 'wordsmith_500k', name: 'Torrente de Palabras', description: '500,000 palabras escritas en total', icon: '🌊', category: 'volume' },
+    wordsmith_1m: { id: 'wordsmith_1m', name: 'Millón de Palabras', description: '1,000,000 palabras escritas en total', icon: '💎', category: 'volume' },
+    
+    // BADGE SUPREMO
+    glorified: { id: 'glorified', name: 'Glorificado', description: 'Desbloqueaste TODOS los badges', icon: '💯', category: 'ultimate' }
 };
 
 // Verificar badges desbloqueados automáticamente
@@ -151,6 +171,26 @@ async function checkAndUnlockBadges() {
             newBadges.push('phrases_200');
         }
         
+        // 4B. BADGES DE MULTI-ELEMENTO (Nivel 3)
+        let completedMulti = [];
+        if (typeof window.challengesLevel3 !== 'undefined') {
+            completedMulti = window.challengesLevel3.loadCompletedMultiChallenges();
+        }
+        
+        const multiCount = completedMulti.length;
+        if (multiCount >= 1 && await shouldUnlockBadge('first_multi')) {
+            newBadges.push('first_multi');
+        }
+        if (multiCount >= 10 && await shouldUnlockBadge('multi_10')) {
+            newBadges.push('multi_10');
+        }
+        if (multiCount >= 100 && await shouldUnlockBadge('multi_100')) {
+            newBadges.push('multi_100');
+        }
+        if (multiCount >= 200 && await shouldUnlockBadge('multi_200')) {
+            newBadges.push('multi_200');
+        }
+        
         // 5. BADGES DE VISIBILIDAD
         const publicEntries = entries.filter(e => e.isPublic).length;
         if (publicEntries >= 1 && await shouldUnlockBadge('first_public')) {
@@ -170,14 +210,16 @@ async function checkAndUnlockBadges() {
             newBadges.push('all_moods');
         }
         
-        // Moods individuales
+        // Moods individuales (sin tildes, como están en el HTML)
         const moodBadges = {
             'alegre': 'mood_alegre',
             'reflexivo': 'mood_reflexivo',
-            'melancólico': 'mood_melancolico',
-            'energético': 'mood_energetico',
-            'sereno': 'mood_sereno',
-            'caótico': 'mood_caotico'
+            'melancolico': 'mood_melancolico',
+            'poderoso': 'mood_poderoso',
+            'nostalgico': 'mood_nostalgico',
+            'cansado': 'mood_cansado',
+            'inspirado': 'mood_inspirado',
+            'inquieto': 'mood_inquieto'
         };
         
         for (const [mood, badgeId] of Object.entries(moodBadges)) {
@@ -228,10 +270,144 @@ async function checkAndUnlockBadges() {
             newBadges.push('epic_entry');
         }
         
+        // Perfect Consistency: 30 días consecutivos con exactamente 1 entrada cada día
+        if (await shouldUnlockBadge('perfect_consistency')) {
+            const sortedDates = Object.keys(entriesByDay).sort();
+            let consecutiveDays = 0;
+            let perfectStreak = 0;
+            
+            for (let i = 0; i < sortedDates.length; i++) {
+                const currentDate = new Date(sortedDates[i]);
+                const entriesThisDay = entriesByDay[sortedDates[i]];
+                
+                // Verificar que sea exactamente 1 entrada
+                if (entriesThisDay === 1) {
+                    consecutiveDays++;
+                    
+                    // Verificar consecutividad con el día anterior
+                    if (i > 0) {
+                        const prevDate = new Date(sortedDates[i - 1]);
+                        const dayDiff = Math.floor((currentDate - prevDate) / (1000 * 60 * 60 * 24));
+                        
+                        if (dayDiff !== 1) {
+                            // No es consecutivo, reiniciar
+                            consecutiveDays = 1;
+                        }
+                    }
+                    
+                    perfectStreak = Math.max(perfectStreak, consecutiveDays);
+                } else {
+                    // Más de 1 entrada o 0, reiniciar
+                    consecutiveDays = 0;
+                }
+            }
+            
+            if (perfectStreak >= 30) {
+                newBadges.push('perfect_consistency');
+            }
+        }
+        
+        // Extreme Productivity: 100 entradas en 30 días (ventana móvil)
+        if (entryCount >= 100 && await shouldUnlockBadge('extreme_productivity')) {
+            // Ordenar entradas por fecha
+            const sortedEntries = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Verificar ventanas de 30 días
+            for (let i = 0; i <= sortedEntries.length - 100; i++) {
+                const firstEntry = new Date(sortedEntries[i].date);
+                const lastEntry = new Date(sortedEntries[i + 99].date);
+                
+                const daysDiff = Math.floor((lastEntry - firstEntry) / (1000 * 60 * 60 * 24));
+                
+                if (daysDiff <= 30) {
+                    newBadges.push('extreme_productivity');
+                    break;
+                }
+            }
+        }
+        
         // Coleccionista de Imágenes
         const pinnedImages = await window.storageManager.loadPinnedImages();
         if (pinnedImages.length >= 50 && await shouldUnlockBadge('image_collector')) {
             newBadges.push('image_collector');
+        }
+        
+        // Acumulador: 100 imágenes en el banco personal
+        if (window.imageBankInstance) {
+            const userImages = window.imageBankInstance.images || [];
+            if (userImages.length >= 100 && await shouldUnlockBadge('image_hoarder')) {
+                newBadges.push('image_hoarder');
+            }
+        }
+        
+        // Minimalista: 10 entradas con menos de 50 palabras
+        const minimalistEntries = entries.filter(e => (e.wordCount || 0) < 50 && (e.wordCount || 0) > 0).length;
+        if (minimalistEntries >= 10 && await shouldUnlockBadge('minimalist')) {
+            newBadges.push('minimalist');
+        }
+        
+        // Ensayista: 5 entradas con +1500 palabras
+        const essayistEntries = entries.filter(e => (e.wordCount || 0) >= 1500).length;
+        if (essayistEntries >= 5 && await shouldUnlockBadge('essayist')) {
+            newBadges.push('essayist');
+        }
+        
+        // Novelista Épico: 3 entradas con +3000 palabras
+        const epicNovelistEntries = entries.filter(e => (e.wordCount || 0) >= 3000).length;
+        if (epicNovelistEntries >= 3 && await shouldUnlockBadge('epic_novelist')) {
+            newBadges.push('epic_novelist');
+        }
+        
+        // Guerra y Paz: 1 entrada con +5000 palabras
+        const warAndPeace = entries.some(e => (e.wordCount || 0) >= 5000);
+        if (warAndPeace && await shouldUnlockBadge('war_and_peace')) {
+            newBadges.push('war_and_peace');
+        }
+        
+        // Emisario sin Placa: 100 entradas sin título
+        const noTitleEntries = entries.filter(e => !e.title || e.title.trim() === '').length;
+        if (noTitleEntries >= 100 && await shouldUnlockBadge('no_title_warrior')) {
+            newBadges.push('no_title_warrior');
+        }
+        
+        // Influencer: 50 entradas públicas
+        const publicCount = entries.filter(e => e.isPublic).length;
+        if (publicCount >= 50 && await shouldUnlockBadge('influencer')) {
+            newBadges.push('influencer');
+        }
+        
+        // Hora del Almuerzo: 30 entradas entre 12 PM y 2 PM
+        const lunchEntries = entries.filter(e => {
+            const hour = new Date(e.date).getHours();
+            return hour >= 12 && hour < 14;
+        }).length;
+        if (lunchEntries >= 30 && await shouldUnlockBadge('lunch_hour')) {
+            newBadges.push('lunch_hour');
+        }
+        
+        // Golden Hour: 25 entradas entre 6 PM y 8 PM
+        const goldenEntries = entries.filter(e => {
+            const hour = new Date(e.date).getHours();
+            return hour >= 18 && hour < 20;
+        }).length;
+        if (goldenEntries >= 25 && await shouldUnlockBadge('golden_hour')) {
+            newBadges.push('golden_hour');
+        }
+        
+        // BADGES DE VOLUMEN DE PALABRAS TOTALES
+        const totalWords = entries.reduce((sum, e) => sum + (e.wordCount || 0), 0);
+        
+        if (totalWords >= 10000 && await shouldUnlockBadge('wordsmith_10k')) {
+            newBadges.push('wordsmith_10k');
+        }
+        if (totalWords >= 100000 && await shouldUnlockBadge('wordsmith_100k')) {
+            newBadges.push('wordsmith_100k');
+        }
+        if (totalWords >= 500000 && await shouldUnlockBadge('wordsmith_500k')) {
+            newBadges.push('wordsmith_500k');
+        }
+        if (totalWords >= 1000000 && await shouldUnlockBadge('wordsmith_1m')) {
+            newBadges.push('wordsmith_1m');
         }
         
         // Ecléctico Visual: todas las categorías usadas
@@ -271,9 +447,40 @@ async function checkAndUnlockBadges() {
             newBadges.push('renaissance');
         }
         
+        // 9. BADGES DEL TIMER
+        const timerEntries = entries.filter(e => e.completedWithTimer);
+        
+        // Badge básico: primer reto de timer completado
+        if (timerEntries.length >= 1 && await shouldUnlockBadge('timer_challenge')) {
+            newBadges.push('timer_challenge');
+        }
+        
+        // Speedster: 10 retos del timer en menos de 3 minutos (180 segundos)
+        const speedsterEntries = timerEntries.filter(e => 
+            e.timerSecondsUsed !== null && e.timerSecondsUsed <= 180
+        );
+        if (speedsterEntries.length >= 10 && await shouldUnlockBadge('speedster')) {
+            newBadges.push('speedster');
+        }
+        
+        // Pensador Reflexivo: 10 retos del timer completados (sin importar tiempo)
+        if (timerEntries.length >= 10 && await shouldUnlockBadge('slow_thinker')) {
+            newBadges.push('slow_thinker');
+        }
+        
         // Desbloquear todos los badges nuevos
         for (const badgeId of newBadges) {
             await unlockBadge(badgeId);
+        }
+        
+        // BADGE SUPREMO: Glorificado - Desbloquear TODOS los badges
+        // Verificar DESPUÉS de desbloquear los demás
+        const unlockedBadges = await loadUnlockedBadges();
+        const totalBadgesAvailable = Object.keys(BADGE_CATALOG).length - 1; // -1 para no contar glorified mismo
+        
+        if (unlockedBadges.length >= totalBadgesAvailable && await shouldUnlockBadge('glorified')) {
+            await unlockBadge('glorified');
+            newBadges.push('glorified');
         }
         
         return newBadges;

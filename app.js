@@ -5,6 +5,36 @@ const UNSPLASH_ACCESS_KEY = 'gGr37vwsEOoqo6jw4yFAcQnl4ikG5MRxRzhvffqMToE';
 const IMAGE_SOURCES = ['unsplash', 'pexels'];
 let currentSourceIndex = 0;
 
+// ============================================
+// FUNCIÓN HELPER: Obtener fecha local en formato ISO
+// ============================================
+function getLocalISOString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}Z`;
+}
+
+// Obtener solo la fecha local (YYYY-MM-DD)
+function getLocalDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+}
+
+// Exponer funciones globalmente
+window.getLocalISOString = getLocalISOString;
+window.getLocalDateString = getLocalDateString;
+
 // Categorías de imágenes
 const IMAGE_CATEGORIES = [
     { id: 'random', name: 'Sorpréndeme', icon: '🎲', themes: null },
@@ -102,6 +132,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initAuth();
     }
     
+    // Cargar mejor racha desde storage (localStorage o Supabase)
+    if (typeof window.storageManager !== 'undefined') {
+        await window.storageManager.loadBestStreak();
+    }
+    
     // Cargar datos (detectará automáticamente si hay sesión)
     await loadEntries();
     await loadPinnedImages();
@@ -159,6 +194,14 @@ function setupEventListeners() {
 
     // Área de escritura
     elements.writingArea.addEventListener('input', () => {
+        const text = elements.writingArea.value.trim();
+        
+        // Iniciar cronómetro si escribe la primera palabra y no está corriendo
+        if (text.length > 0 && !window.writingTimer.isRunning) {
+            window.writingTimer.start();
+            console.log('⏱️ Cronómetro iniciado al escribir');
+        }
+        
         updateStats();
         checkSaveButton();
         saveDraftIfLocked(); // Guardar borrador si está bloqueado
@@ -700,16 +743,33 @@ async function saveEntry() {
     // Detectar eco de palabras ANTES de guardar
     detectWordEcho();
 
+    // ========================================
+    // CRONÓMETRO DE ESCRITURA - Detener y obtener tiempo
+    // ========================================
+    let writingSeconds = 0;
+    const existingTime = currentState.lastSavedEntry?.writingSeconds || 0;
+    
+    if (window.writingTimer && window.writingTimer.isRunning) {
+        writingSeconds = window.writingTimer.onSave(existingTime);
+        console.log(`⏱️ Tiempo de escritura: ${writingSeconds}s`);
+    } else if (existingTime > 0) {
+        // Si no hay cronómetro corriendo pero existe tiempo previo, mantenerlo
+        writingSeconds = existingTime;
+    }
+
     // Detectar si estaba en modo temporizador
     const wasTimedMode = typeof window.challengeVariations !== 'undefined' && 
                          window.challengeVariations.isTimedMode() &&
                          window.challengeVariations.timerState().hasStartedWriting;
     
     let timeUsedMessage = '';
+    let timerSecondsUsed = null;
     
     if (wasTimedMode) {
         // Obtener tiempo usado antes de limpiar
         const timeUsed = window.challengeVariations.getFormattedTimeUsed();
+        const timerState = window.challengeVariations.timerState();
+        timerSecondsUsed = 600 - timerState.secondsRemaining; // Total usado (10 min - restante)
         timeUsedMessage = ` en ${timeUsed}`;
     }
     
@@ -739,7 +799,12 @@ async function saveEntry() {
             text: currentState.text.trim(),
             wordCount: currentState.text.trim().split(/\s+/).length,
             charCount: currentState.text.length,
-            updatedAt: new Date().toISOString()
+            updatedAt: getLocalISOString(),
+            // Tiempo de escritura acumulado
+            writingSeconds: writingSeconds,
+            // Mantener datos del timer si existían (no sobrescribir en updates)
+            completedWithTimer: currentState.lastSavedEntry.completedWithTimer || false,
+            timerSecondsUsed: currentState.lastSavedEntry.timerSecondsUsed || null
         };
         
         console.log('📝 Actualizando entrada existente, ID:', entry.id, 'Supabase ID:', entry.supabaseId);
@@ -747,14 +812,19 @@ async function saveEntry() {
         // NUEVA entrada
         entry = {
             id: Date.now(),
-            date: new Date().toISOString(),
+            date: getLocalISOString(),
             mood: currentState.mood,
             title: currentState.title.trim() || null,
             text: currentState.text.trim(),
             image: currentState.imageData,
             wordCount: currentState.text.trim().split(/\s+/).length,
             charCount: currentState.text.length,
-            isPublic: false
+            isPublic: false,
+            // Tiempo de escritura
+            writingSeconds: writingSeconds,
+            // Datos del timer (metadata interna)
+            completedWithTimer: wasTimedMode,
+            timerSecondsUsed: timerSecondsUsed
         };
         
         console.log('✨ Creando nueva entrada');
@@ -837,6 +907,10 @@ async function saveEntry() {
                 if (result.completed) {
                     // Marcar elementos como usados
                     await window.challengesLevel3.markMultiChallengeElementsAsUsed(multiChallenge, entry.date);
+                    
+                    // Guardar en tracking de multi-challenges completados
+                    await window.challengesLevel3.saveCompletedMultiChallenge(multiChallenge, entry.date);
+                    
                     console.log('✅ Reto multi-elemento completado:', multiChallenge.description);
                     
                     // Mensaje personalizado según el tipo
@@ -1031,7 +1105,7 @@ function toggleDraftLock() {
 function updateLockButton() {
     if (currentState.draftLocked) {
         elements.autoSaveBtn.classList.add('active');
-        elements.autoSaveBtn.title = 'Borrador bloqueado - Se conservará al recargar';
+        elements.autoSaveBtn.setAttribute('data-tooltip', 'Borrador bloqueado');
         // Cambiar a candado cerrado
         elements.lockIcon.innerHTML = `
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -1039,7 +1113,7 @@ function updateLockButton() {
         `;
     } else {
         elements.autoSaveBtn.classList.remove('active');
-        elements.autoSaveBtn.title = 'Bloquear borrador';
+        elements.autoSaveBtn.setAttribute('data-tooltip', 'Bloquear borrador');
         // Cambiar a candado abierto
         elements.lockIcon.innerHTML = `
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -1237,6 +1311,18 @@ function renderHistory() {
 function viewEntry(entryId, source = 'archive') {
     // source puede ser: 'archive' (mis entradas), 'archived' (archivados)
     
+    // Mapa de traducción de moods (con tildes)
+    const moodLabels = {
+        'reflexivo': 'Reflexivo',
+        'poderoso': 'Poderoso',
+        'nostalgico': 'Nostálgico',
+        'cansado': 'Cansado',
+        'inspirado': 'Inspirado',
+        'alegre': 'Alegre',
+        'inquieto': 'Inquieto',
+        'melancolico': 'Melancólico'
+    };
+    
     // Buscar entrada por ID (puede ser número timestamp o string UUID de Supabase)
     const entry = currentState.entries.find(e => String(e.id) === String(entryId));
     if (!entry) {
@@ -1260,7 +1346,7 @@ function viewEntry(entryId, source = 'archive') {
                         <div class="entry-date">${formatDate(entry.date)}</div>
                         <div class="entry-mood-display">
                             ${getMoodIcon(entry.mood)}
-                            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${entry.mood}</span>
+                            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${moodLabels[entry.mood] || entry.mood}</span>
                         </div>
                     </div>
                     ${entry.title ? `<h3 class="entry-title" id="entryTitleDisplay">${entry.title}</h3>` : '<h3 class="entry-title" id="entryTitleDisplay" style="display: none;"></h3>'}
@@ -1270,8 +1356,9 @@ function viewEntry(entryId, source = 'archive') {
                     <div class="entry-stats">
                         <span id="entryWordCount">${entry.wordCount} palabras</span>
                         <span id="entryCharCount">${entry.charCount} caracteres</span>
+                        ${entry.writingSeconds ? `<span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25);">Tiempo: ${window.formatTime(entry.writingSeconds)}</span>` : ''}
                     </div>
-                    ${entry.image.photographer !== 'Demo' ? `
+                    ${entry.image.photographer !== 'Demo' && entry.image.source !== 'user_bank' ? `
                         <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
                             Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>
                         </div>
@@ -1402,9 +1489,18 @@ function getMoodIcon(mood) {
 
 // Formatear fecha
 function formatDate(isoDate) {
-    const date = new Date(isoDate);
+    // Crear fecha en zona horaria local sin conversión UTC
+    const [datePart, timePart] = isoDate.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = (timePart || '00:00').split(':').map(Number);
+    
+    const date = new Date(year, month - 1, day, hour, minute);
     const now = new Date();
-    const diffTime = Math.abs(now - date);
+    
+    // Calcular diferencia solo basándose en las fechas (sin horas)
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffTime = nowOnly - dateOnly;
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays === 0) {
@@ -1848,10 +1944,10 @@ function updatePinButton() {
     
     if (isPinned) {
         pinBtn.classList.add('pinned');
-        pinBtn.title = 'Desmarcar imagen';
+        pinBtn.setAttribute('data-tooltip', 'Desmarcar imagen');
     } else {
         pinBtn.classList.remove('pinned');
-        pinBtn.title = 'Marcar imagen';
+        pinBtn.setAttribute('data-tooltip', 'Marcar imagen');
     }
 }
 
@@ -1962,6 +2058,11 @@ function updateStreak() {
         const previousStreak = parseInt(streakCount.textContent) || 0;
         streakCount.textContent = streak;
         
+        // Actualizar mejor racha si es necesario
+        if (typeof window.streakSystem !== 'undefined') {
+            window.streakSystem.updateBestStreak(streak);
+        }
+        
         // Animación si aumentó la racha
         if (streak > previousStreak && streak > 0) {
             streakDisplay.classList.add('milestone');
@@ -1987,11 +2088,8 @@ function updateStatsButtonState(streak) {
     
     if (isUnlocked) {
         statsBtn.classList.remove('stats-locked');
-        statsBtn.title = 'Estadísticas';
     } else {
         statsBtn.classList.add('stats-locked');
-        const daysNeeded = 30 - streak;
-        statsBtn.title = `Bloqueado - Desbloquea a los 30 días (faltan ${daysNeeded})`;
     }
 }
 
@@ -2252,7 +2350,7 @@ function isWordUsed(word) {
 // Marcar palabra como usada
 async function markWordAsUsed(specificWord = null, specificDate = null) {
     const wordToMark = specificWord || (dailyWord ? dailyWord.word : null);
-    const dateToUse = specificDate || new Date().toISOString();
+    const dateToUse = specificDate || getLocalISOString();
     
     if (!wordToMark) return;
     

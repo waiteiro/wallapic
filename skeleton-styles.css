@@ -1,0 +1,360 @@
+/* ============================================
+   SKELETON SCREENS - LOADING STATES
+   ============================================ */
+
+/* Animación base del skeleton */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-secondary) 0%,
+        var(--bg-tertiary) 50%,
+        var(--bg-secondary) 100%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite linear;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Ajustes para tema claro */
+[data-theme="light"] .skeleton {
+    background: linear-gradient(
+        90deg,
+        #f0f0f0 0%,
+        #e0e0e0 50%,
+        #f0f0f0 100%
+    );
+}
+
+/* Elementos básicos del skeleton */
+.skeleton-text {
+    height: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+}
+
+.skeleton-text:last-child {
+    margin-bottom: 0;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-text.medium {
+    width: 80%;
+}
+
+.skeleton-text.long {
+    width: 100%;
+}
+
+.skeleton-title {
+    height: 1.5rem;
+    width: 40%;
+    margin-bottom: 1rem;
+    border-radius: 6px;
+}
+
+.skeleton-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+}
+
+.skeleton-badge {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+}
+
+.skeleton-card {
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+/* Skeleton para modal de perfil */
+.skeleton-profile-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.skeleton-profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.skeleton-stat {
+    text-align: center;
+}
+
+.skeleton-stat-value {
+    height: 2rem;
+    width: 3rem;
+    margin: 0 auto 0.5rem;
+    border-radius: 6px;
+}
+
+.skeleton-stat-label {
+    height: 0.75rem;
+    width: 4rem;
+    margin: 0 auto;
+    border-radius: 4px;
+}
+
+/* Skeleton para badges grid */
+.skeleton-badges-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+
+.skeleton-badge-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.75rem 0.4rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.skeleton-badge-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 4px;
+}
+
+.skeleton-badge-name {
+    height: 0.68rem;
+    width: 80%;
+    border-radius: 3px;
+}
+
+/* Skeleton para archivo de entradas */
+.skeleton-entries-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.skeleton-entry-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.skeleton-entry-date {
+    height: 0.75rem;
+    width: 30%;
+    border-radius: 3px;
+}
+
+.skeleton-entry-title {
+    height: 1.25rem;
+    width: 70%;
+    border-radius: 4px;
+}
+
+.skeleton-entry-text {
+    height: 0.875rem;
+    border-radius: 3px;
+}
+
+.skeleton-entry-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.skeleton-entry-words {
+    height: 0.75rem;
+    width: 25%;
+    border-radius: 3px;
+}
+
+.skeleton-entry-mood {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+}
+
+/* Skeleton para estadísticas */
+.skeleton-stats-header {
+    margin-bottom: 1.5rem;
+}
+
+.skeleton-stats-title {
+    height: 1.5rem;
+    width: 40%;
+    margin-bottom: 0.5rem;
+    border-radius: 6px;
+}
+
+.skeleton-stats-subtitle {
+    height: 0.875rem;
+    width: 60%;
+    border-radius: 4px;
+}
+
+.skeleton-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.skeleton-stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.skeleton-stat-card-label {
+    height: 0.75rem;
+    width: 50%;
+    margin-bottom: 0.75rem;
+    border-radius: 3px;
+}
+
+.skeleton-stat-card-value {
+    height: 2rem;
+    width: 60%;
+    border-radius: 6px;
+}
+
+/* Skeleton para círculos */
+.skeleton-circles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.skeleton-circle-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.skeleton-circle-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.skeleton-circle-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+}
+
+.skeleton-circle-name {
+    height: 1rem;
+    flex: 1;
+    border-radius: 4px;
+}
+
+.skeleton-circle-description {
+    height: 0.875rem;
+    border-radius: 3px;
+}
+
+.skeleton-circle-members {
+    height: 0.75rem;
+    width: 40%;
+    border-radius: 3px;
+}
+
+/* Skeleton para palabras del diccionario */
+.skeleton-words-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.skeleton-word-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.skeleton-word-title {
+    height: 1rem;
+    width: 60%;
+    border-radius: 4px;
+}
+
+.skeleton-word-def {
+    height: 0.75rem;
+    border-radius: 3px;
+}
+
+/* Estados de carga con fade in */
+.skeleton-container {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Hide real content while loading */
+.loading .content-loaded {
+    display: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .skeleton-badges-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .skeleton-entries-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .skeleton-stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
