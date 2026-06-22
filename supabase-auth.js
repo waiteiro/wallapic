@@ -85,6 +85,11 @@ async function initAuth() {
         await loadUserProfileOnStartup();
         
         updateUIForLoggedUser();
+        
+        // Inicializar banco de imágenes con el usuario recuperado
+        if (typeof initImageBank === 'function') {
+            initImageBank(currentUser);
+        }
     }
     
     // Event listeners para auth modal
@@ -308,6 +313,14 @@ function logout() {
     currentUser = null;
     window.currentUser = null; // Limpiar global
     localStorage.removeItem('wallapic_user');
+    
+    // Limpiar banco de imágenes
+    if (window.imageBankInstance) {
+        window.imageBankInstance.currentUser = null;
+        window.imageBankInstance.images = [];
+        window.imageBankInstance.selectedImageForWriting = null;
+    }
+    
     updateUIForLoggedUser();
     showToast('Sesión cerrada', 'info');
     
@@ -1859,3 +1872,42 @@ async function saveProfile() {
 window.openProfileModal = openProfileModal;
 window.closeProfileModal = closeProfileModal;
 window.saveProfile = saveProfile;
+
+
+// ============================================
+// MODAL DE AYUDA (F1)
+// ============================================
+
+function openHelpModal() {
+    const modal = document.getElementById('helpModal');
+    if (modal) {
+        modal.classList.add('active');
+    }
+}
+
+function closeHelpModal() {
+    const modal = document.getElementById('helpModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// Event listeners para el modal de ayuda
+document.addEventListener('DOMContentLoaded', () => {
+    const closeHelpBtn = document.getElementById('closeHelpBtn');
+    const helpModal = document.getElementById('helpModal');
+    
+    if (closeHelpBtn) {
+        closeHelpBtn.addEventListener('click', closeHelpModal);
+    }
+    
+    if (helpModal) {
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) closeHelpModal();
+        });
+    }
+});
+
+// Exportar funciones globalmente
+window.openHelpModal = openHelpModal;
+window.closeHelpModal = closeHelpModal;

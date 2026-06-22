@@ -66,6 +66,9 @@ let currentState = {
     lastSavedEntry: null
 };
 
+// Exponer currentState globalmente para que el banco de imágenes pueda acceder
+window.currentState = currentState;
+
 // Elementos del DOM
 const elements = {
     mainImage: document.getElementById('mainImage'),
@@ -253,10 +256,36 @@ function setupEventListeners() {
 
     // Atajos de teclado
     document.addEventListener('keydown', (e) => {
+        // F1 para ayuda (toggle)
+        if (e.key === 'F1') {
+            e.preventDefault();
+            const helpModal = document.getElementById('helpModal');
+            if (helpModal.classList.contains('active')) {
+                closeHelpModal();
+            } else {
+                openHelpModal();
+            }
+        }
         // Ctrl/Cmd + S para guardar
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
             if (!elements.saveBtn.disabled) saveEntry();
+        }
+        // Ctrl + Enter para guardar
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            if (!elements.saveBtn.disabled) saveEntry();
+        }
+        // Ctrl + L para limpiar
+        if (e.ctrlKey && e.key === 'l') {
+            e.preventDefault();
+            clearAndRestart();
+        }
+        // Ctrl + I para cambiar imagen
+        if (e.ctrlKey && e.key === 'i') {
+            e.preventDefault();
+            const changeImageBtn = document.getElementById('changeImageBtn');
+            if (changeImageBtn) changeImageBtn.click();
         }
         // Esc para cerrar modales
         if (e.key === 'Escape') {
@@ -266,6 +295,7 @@ function setupEventListeners() {
             closeArchive();
             closeBadgeDetail();
             closeClearConfirmModal();
+            closeHelpModal();
             const statsModal = document.getElementById('statsModal');
             if (statsModal) statsModal.classList.remove('active');
         }
@@ -450,6 +480,12 @@ function saveDailyImage() {
 // Cargar o verificar imagen del día
 function loadOrCheckDailyImage() {
     try {
+        // PRIORIDAD 0: Si hay una imagen del banco seleccionada, NO sobrescribir
+        if (currentState.imageData?.source === 'user_bank') {
+            console.log('🖼️ Imagen del banco activa, no se sobrescribe');
+            return;
+        }
+        
         // PRIORIDAD 1: Si hay borrador bloqueado, usar su imagen
         const draftStored = localStorage.getItem('wallapic_draft');
         if (draftStored) {
@@ -653,6 +689,14 @@ function highlightWordInTextarea(word) {
 async function saveEntry() {
     if (!currentState.mood || !currentState.text.trim()) return;
 
+    // ========================================
+    // 1. UI INSTANTÁNEA - Mostrar "Guardando..."
+    // ========================================
+    const originalBtnText = elements.saveBtn.textContent;
+    elements.saveBtn.textContent = 'Guardando...';
+    elements.saveBtn.disabled = true;
+    elements.saveBtn.style.backgroundColor = '#ffb347'; // Color naranja suave
+    
     // Detectar eco de palabras ANTES de guardar
     detectWordEcho();
 
@@ -679,6 +723,11 @@ async function saveEntry() {
                      currentState.lastSavedEntry.image?.url === currentState.imageData?.url &&
                      currentState.lastSavedEntry.mood === currentState.mood;
 
+    console.log('🔍 DEBUG - lastSavedEntry:', currentState.lastSavedEntry);
+    console.log('🔍 DEBUG - isUpdate:', isUpdate);
+    console.log('🔍 DEBUG - Current image URL:', currentState.imageData?.url);
+    console.log('🔍 DEBUG - Current mood:', currentState.mood);
+
     let entry;
     let savedEntry;
     
@@ -693,7 +742,7 @@ async function saveEntry() {
             updatedAt: new Date().toISOString()
         };
         
-        console.log('📝 Actualizando entrada existente');
+        console.log('📝 Actualizando entrada existente, ID:', entry.id, 'Supabase ID:', entry.supabaseId);
     } else {
         // NUEVA entrada
         entry = {
@@ -711,6 +760,9 @@ async function saveEntry() {
         console.log('✨ Creando nueva entrada');
     }
 
+    // ========================================
+    // 2. GUARDAR EN BACKGROUND (async)
+    // ========================================
     try {
         // Usar storage-manager (detecta si hay sesión)
         if (isUpdate) {
@@ -733,6 +785,22 @@ async function saveEntry() {
         
         // Guardar referencia para futuras actualizaciones
         currentState.lastSavedEntry = savedEntry;
+        console.log('✅ lastSavedEntry guardado:', currentState.lastSavedEntry);
+        
+        // Marcar imagen del banco como usada (si aplica)
+        if (currentState.imageData?.source === 'user_bank' && currentState.imageData?.bankImageId && !isUpdate) {
+            try {
+                // Usar supabaseId si existe (usuario logueado), sino el id local
+                const entryId = savedEntry.supabaseId || savedEntry.id;
+                await window.imageBankInstance.markImageAsUsed(
+                    currentState.imageData.bankImageId,
+                    entryId
+                );
+                console.log('✅ Imagen del banco marcada como usada');
+            } catch (error) {
+                console.error('Error al marcar imagen como usada:', error);
+            }
+        }
         
         // Verificar si usó la palabra del día
         const fullText = (entry.title || '') + ' ' + entry.text;
@@ -812,7 +880,9 @@ async function saveEntry() {
             console.log(`🏆 ${newBadges.length} badges verificados`);
         }
         
-        // Mostrar confirmación
+        // ========================================
+        // 3. UI FINAL - Mostrar éxito
+        // ========================================
         if (wasTimedMode) {
             showSaveConfirmation(`¡Perfecto! Completado${timeUsedMessage}`);
             showToast(`✅ Entrada guardada${timeUsedMessage}`, 'success');
@@ -850,7 +920,16 @@ async function saveEntry() {
         
     } catch (error) {
         console.error('Error guardando entrada:', error);
-        alert('Error al guardar la entrada');
+        
+        // ========================================
+        // 4. UI ERROR - Restaurar estado
+        // ========================================
+        elements.saveBtn.textContent = originalBtnText;
+        elements.saveBtn.disabled = false;
+        elements.saveBtn.style.backgroundColor = '';
+        
+        showToast('❌ Error al guardar', 'error');
+        alert('Error al guardar la entrada. Revisa tu conexión.');
     }
 }
 
@@ -1360,6 +1439,12 @@ async function reloadUserData() {
     await loadEntries();
     await loadPinnedImages();
     updateStreak();
+    
+    // Inicializar banco de imágenes si el usuario está logueado
+    if (window.currentUser && typeof initImageBank === 'function') {
+        initImageBank(window.currentUser);
+    }
+    
     showToast('Datos sincronizados', 'success');
 }
 
@@ -1508,8 +1593,8 @@ function updateLiveStats() {
     document.getElementById('entryCharCount').textContent = `${chars} caracteres`;
 }
 
-// Actualizar entrada
-async function updateEntry(entryId) {
+// Actualizar entrada desde modal de edición
+async function updateEntryFromModal(entryId) {
     const newTitle = document.getElementById('entryTitleEdit').value.trim();
     const newText = document.getElementById('entryTextEdit').value.trim();
     
@@ -1530,7 +1615,7 @@ async function updateEntry(entryId) {
         
         // Guardar en storage
         if (entry.supabaseId) {
-            await window.storageManager.updateEntry(entry.id, entry.supabaseId, {
+            await window.storageManager.updateEntryFields(entry.id, entry.supabaseId, {
                 title: newTitle,
                 text: newText,
                 word_count: entry.wordCount,
@@ -1568,7 +1653,7 @@ async function archiveEntry(entryId) {
         
         // Guardar en storage
         if (entry.supabaseId) {
-            await window.storageManager.updateEntry(entry.id, entry.supabaseId, {
+            await window.storageManager.updateEntryFields(entry.id, entry.supabaseId, {
                 is_archived: true
             });
         } else {
@@ -1600,7 +1685,7 @@ async function unarchiveEntry(entryId) {
         
         // Guardar en storage
         if (entry.supabaseId) {
-            await window.storageManager.updateEntry(entry.id, entry.supabaseId, {
+            await window.storageManager.updateEntryFields(entry.id, entry.supabaseId, {
                 is_archived: false
             });
         } else {
@@ -1634,7 +1719,7 @@ function checkAndShowArchivedTab() {
 
 window.editEntry = editEntry;
 window.cancelEdit = cancelEdit;
-window.updateEntry = updateEntry;
+window.updateEntry = updateEntryFromModal;
 window.archiveEntry = archiveEntry;
 window.unarchiveEntry = unarchiveEntry;
 window.checkAndShowArchivedTab = checkAndShowArchivedTab;
@@ -1781,16 +1866,22 @@ function renderPinnedRibbon() {
     
     const currentUrl = currentState.imageData?.url;
     
-    ribbon.innerHTML = pinnedImages.map((img, index) => `
-        <div class="pinned-thumbnail ${img.url === currentUrl ? 'active' : ''}" 
-             onclick="loadPinnedImage(${index})"
-             title="${img.alt || 'Imagen marcada'}">
-            <img src="${img.thumbnail}" alt="${img.alt}">
-            <button class="pinned-thumbnail-remove" 
-                    onclick="event.stopPropagation(); removePinnedImage(${index})"
-                    title="Eliminar">×</button>
-        </div>
-    `).join('');
+    ribbon.innerHTML = pinnedImages.map((img, index) => {
+        // Manejar diferentes formatos de URL de thumbnail
+        const thumbnailUrl = img.thumbnail || img.thumbnail_url || img.url;
+        const altText = img.alt || img.title || 'Imagen marcada';
+        
+        return `
+            <div class="pinned-thumbnail ${img.url === currentUrl ? 'active' : ''}" 
+                 onclick="loadPinnedImage(${index})"
+                 title="${altText}">
+                <img src="${thumbnailUrl}" alt="${altText}">
+                <button class="pinned-thumbnail-remove" 
+                        onclick="event.stopPropagation(); removePinnedImage(${index})"
+                        title="Eliminar">×</button>
+            </div>
+        `;
+    }).join('');
 }
 
 function loadPinnedImage(index) {

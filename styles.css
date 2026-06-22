@@ -171,11 +171,14 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden; /* Evitar que la imagen se salga */
 }
 
 .main-image {
     max-width: 100%;
-    max-height: 100%;
+    max-height: 70vh; /* Limitar altura máxima para imágenes verticales */
+    width: auto;
+    height: auto;
     object-fit: contain;
     display: block;
     border-radius: 8px;
@@ -188,9 +191,11 @@ body {
 
 .image-wrapper {
     position: relative;
-    display: inline-block;
+    display: inline-flex; /* Cambiado a inline-flex para ajustarse al tamaño de la imagen */
+    align-items: center;
+    justify-content: center;
     max-width: 100%;
-    max-height: 100%;
+    max-height: 70vh; /* Consistente con la imagen */
 }
 
 .image-loader {
@@ -340,6 +345,12 @@ body {
     z-index: 20;
     opacity: 0;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Mostrar botones al hacer hover sobre el wrapper */
+.image-wrapper:hover .pin-btn,
+.image-wrapper:hover .download-btn {
+    opacity: 1;
 }
 
 .image-wrapper:hover .pin-btn {
@@ -5329,5 +5340,124 @@ body {
     100% {
         background: rgba(255, 193, 7, 0.4);
         box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
+    }
+}
+
+/* ============================================
+   MODAL DE AYUDA (F1) - ULTRA MINIMALISTA
+   ============================================ */
+
+.help-modal {
+    max-width: 480px;
+}
+
+.modal-header-compact {
+    padding: 0.75rem 1.25rem !important;
+    min-height: auto !important;
+    background: transparent !important;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header-compact h2 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.help-content {
+    padding: 1.5rem;
+}
+
+.help-tagline {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.help-section {
+    margin-bottom: 1.5rem;
+}
+
+.help-section h3 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.help-list {
+    list-style: none;
+    padding-left: 0;
+}
+
+.help-list li {
+    padding: 0.4rem 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.help-list li strong {
+    color: var(--text-primary);
+}
+
+.shortcuts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.shortcut {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.shortcut:last-child {
+    border-bottom: none;
+}
+
+.shortcut kbd {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.shortcut span {
+    color: var(--text-secondary);
+}
+
+.help-tips {
+    list-style: none;
+    padding: 0;
+}
+
+.help-tips li {
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--bg-tertiary);
+    line-height: 1.5;
+}
+
+.help-tips li:last-child {
+    border-bottom: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .help-modal {
+        max-width: 90%;
+    }
+    
+    .help-content {
+        padding: 1rem;
     }
 }

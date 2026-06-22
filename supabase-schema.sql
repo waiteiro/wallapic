@@ -13,6 +13,7 @@ drop table if exists user_badges cascade;
 drop table if exists badges cascade;
 drop table if exists favorites cascade;
 drop table if exists pinned_images cascade;
+drop table if exists user_images cascade;
 drop table if exists used_words cascade;
 drop table if exists entries cascade;
 drop table if exists profiles cascade;
@@ -44,7 +45,8 @@ create table entries (
   char_count integer,
   is_public boolean default false, -- false = privada, true = pública
   is_archived boolean default false, -- false = activa, true = archivada
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Tabla de palabras del diccionario usadas
@@ -64,6 +66,20 @@ create table pinned_images (
   user_id uuid references users(id) on delete cascade not null,
   image jsonb not null, -- Toda la info de la imagen (url, photographer, etc.)
   pinned_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Tabla de banco de imágenes del usuario (Cloudinary)
+create table user_images (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references users(id) on delete cascade not null,
+  image_url text not null, -- URL de Cloudinary (secure_url)
+  thumbnail_url text, -- URL miniatura de Cloudinary
+  cloudinary_public_id text, -- ID público de Cloudinary (para referencia)
+  title text, -- Título opcional de la imagen
+  used boolean default false, -- Si ya fue usada en una entrada
+  used_at timestamp with time zone, -- Cuándo fue usada
+  entry_id uuid references entries(id) on delete set null, -- Entrada donde se usó
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Tabla de favoritos (entradas públicas guardadas por usuarios)
@@ -175,6 +191,8 @@ create index entries_is_archived_idx on entries(is_archived);
 create index used_words_user_id_idx on used_words(user_id);
 create index users_username_idx on users(username);
 create index pinned_images_user_id_idx on pinned_images(user_id);
+create index user_images_user_id_idx on user_images(user_id);
+create index user_images_used_idx on user_images(used);
 create index favorites_user_id_idx on favorites(user_id);
 create index favorites_entry_id_idx on favorites(entry_id);
 create index user_badges_user_id_idx on user_badges(user_id);
@@ -194,6 +212,7 @@ alter table users enable row level security;
 alter table entries enable row level security;
 alter table used_words enable row level security;
 alter table pinned_images enable row level security;
+alter table user_images enable row level security;
 alter table favorites enable row level security;
 alter table badges enable row level security;
 alter table user_badges enable row level security;
@@ -264,6 +283,23 @@ create policy "Anyone can view pinned images"
 
 create policy "Anyone can delete pinned images"
   on pinned_images for delete
+  using (true);
+
+-- Políticas de seguridad para user_images
+create policy "Anyone can insert user images"
+  on user_images for insert
+  with check (true);
+
+create policy "Anyone can view user images"
+  on user_images for select
+  using (true);
+
+create policy "Anyone can update user images"
+  on user_images for update
+  using (true);
+
+create policy "Anyone can delete user images"
+  on user_images for delete
   using (true);
 
 -- Políticas de seguridad para favorites

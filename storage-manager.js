@@ -61,13 +61,13 @@ async function saveEntryToStorage(entry) {
     }
 }
 
-// Actualizar entrada existente
+// Actualizar entrada existente (objeto completo)
 async function updateEntryInStorage(entry) {
     const user = getCurrentUser();
     
     if (user && window.supabaseClient && entry.supabaseId) {
         // Usuario logueado: actualizar en Supabase
-        console.log('🔄 Actualizando entrada en Supabase...');
+        console.log('🔄 Actualizando entrada en Supabase...', entry.supabaseId);
         
         try {
             const { data, error } = await window.supabaseClient
@@ -76,7 +76,8 @@ async function updateEntryInStorage(entry) {
                     title: entry.title || null,
                     text: entry.text,
                     word_count: entry.wordCount,
-                    char_count: entry.charCount
+                    char_count: entry.charCount,
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', entry.supabaseId)
                 .eq('user_id', user.id)
@@ -86,9 +87,12 @@ async function updateEntryInStorage(entry) {
             if (error) throw error;
             
             console.log('✅ Entrada actualizada en Supabase');
+            
+            // Retornar entrada con formato correcto
             return { 
-                ...entry, 
-                updatedAt: new Date().toISOString()
+                ...entry,
+                supabaseId: data.id,
+                updatedAt: data.updated_at || new Date().toISOString()
             };
             
         } catch (error) {
@@ -97,7 +101,7 @@ async function updateEntryInStorage(entry) {
         }
     } else {
         // Sin sesión: actualizar en localStorage
-        console.log('🔄 Actualizando entrada en localStorage...');
+        console.log('🔄 Actualizando entrada en localStorage...', entry.id);
         
         const entries = loadEntriesFromLocalStorage();
         const index = entries.findIndex(e => e.id === entry.id);
@@ -108,8 +112,51 @@ async function updateEntryInStorage(entry) {
             console.log('✅ Entrada actualizada en localStorage');
             return entries[index];
         } else {
-            console.warn('⚠️ Entrada no encontrada para actualizar');
-            return entry;
+            console.warn('⚠️ Entrada no encontrada para actualizar, ID:', entry.id);
+            throw new Error('Entrada no encontrada en localStorage');
+        }
+    }
+}
+
+// Actualizar entrada con campos específicos (para edición parcial)
+async function updateEntryFieldsInStorage(entryId, supabaseId, updates) {
+    const user = getCurrentUser();
+    
+    if (user && window.supabaseClient && supabaseId) {
+        // Usuario logueado: actualizar en Supabase
+        console.log('🔄 Actualizando campos de entrada en Supabase...', supabaseId);
+        
+        try {
+            const { error } = await window.supabaseClient
+                .from('entries')
+                .update(updates)
+                .eq('id', supabaseId)
+                .eq('user_id', user.id);
+            
+            if (error) throw error;
+            
+            console.log('✅ Campos actualizados en Supabase');
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Error actualizando campos en Supabase:', error);
+            throw error;
+        }
+    } else {
+        // Sin sesión: actualizar en localStorage
+        console.log('🔄 Actualizando campos en localStorage...', entryId);
+        
+        const entries = loadEntriesFromLocalStorage();
+        const index = entries.findIndex(e => e.id === entryId);
+        
+        if (index !== -1) {
+            entries[index] = { ...entries[index], ...updates, updatedAt: new Date().toISOString() };
+            localStorage.setItem('wallapic_entries', JSON.stringify(entries));
+            console.log('✅ Campos actualizados en localStorage');
+            return true;
+        } else {
+            console.warn('⚠️ Entrada no encontrada para actualizar campos, ID:', entryId);
+            throw new Error('Entrada no encontrada en localStorage');
         }
     }
 }
@@ -226,30 +273,6 @@ async function makeEntryPublic(entryId, supabaseId) {
         
     } catch (error) {
         console.error('❌ Error haciendo pública la entrada:', error);
-        throw error;
-    }
-}
-
-// Actualizar entrada
-async function updateEntryInStorage(entryId, supabaseId, updates) {
-    const user = getCurrentUser();
-    
-    if (!user || !window.supabaseClient) return false;
-    
-    try {
-        const { error } = await window.supabaseClient
-            .from('entries')
-            .update(updates)
-            .eq('id', supabaseId)
-            .eq('user_id', user.id);
-        
-        if (error) throw error;
-        
-        console.log('✅ Entrada actualizada');
-        return true;
-        
-    } catch (error) {
-        console.error('❌ Error actualizando entrada:', error);
         throw error;
     }
 }
@@ -570,6 +593,7 @@ window.storageManager = {
     // Entradas
     saveEntry: saveEntryToStorage,
     updateEntry: updateEntryInStorage,
+    updateEntryFields: updateEntryFieldsInStorage,
     loadEntries: loadEntriesFromStorage,
     deleteEntry: deleteEntryFromStorage,
     makeEntryPublic,

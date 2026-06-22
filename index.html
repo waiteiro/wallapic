@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WallaPic - Escribe a través de la imagen</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="circles-styles.css">
+    <link rel="stylesheet" href="image-bank.css">
 </head>
 <body>
     <div id="app">
@@ -529,6 +531,52 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modal de Ayuda (F1) -->
+        <div id="helpModal" class="modal">
+            <div class="modal-content help-modal">
+                <div class="modal-header modal-header-compact">
+                    <h2>Ayuda</h2>
+                    <button id="closeHelpBtn" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="help-content">
+                        <p class="help-tagline">La imagen es el umbral, no el tema.<br>Escribe cada día y mantén tu racha.</p>
+                        
+                        <div class="help-section">
+                            <h3>Atajos</h3>
+                            <div class="shortcuts-grid">
+                                <div class="shortcut">
+                                    <kbd>Ctrl + S</kbd>
+                                    <span>Guardar entrada</span>
+                                </div>
+                                <div class="shortcut">
+                                    <kbd>Ctrl + L</kbd>
+                                    <span>Limpiar texto</span>
+                                </div>
+                                <div class="shortcut">
+                                    <kbd>Ctrl + I</kbd>
+                                    <span>Cambiar imagen</span>
+                                </div>
+                                <div class="shortcut">
+                                    <kbd>Esc</kbd>
+                                    <span>Cerrar modales</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="help-section">
+                            <h3>Tips</h3>
+                            <ul class="help-tips">
+                                <li>Escribe cada día para mantener tu racha 🔥</li>
+                                <li>Completa retos diarios para aprender palabras 🎯</li>
+                                <li>Desbloquea categorías según tu racha 🖼️</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Confetti canvas -->
@@ -551,6 +599,7 @@
     <script src="archive-manager.js"></script>
     <script src="circles-manager.js"></script>
     <script src="circles-ui.js"></script>
+    <script src="image-bank.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
