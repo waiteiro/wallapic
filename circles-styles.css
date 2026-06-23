@@ -34,25 +34,30 @@
    BADGE DE NOTIFICACIÓN (único en sidebar)
    ======================================== */
 
+/* Asegurar que el botón de círculos tenga position relative */
+#circlesBtn {
+    position: relative;
+}
+
 .circles-notification-badge {
     position: absolute;
     top: -6px;
-    right: -6px;
-    min-width: 18px;
-    height: 18px;
+    left: -8px;
+    min-width: 20px;
+    height: 20px;
     background: var(--circles-danger);
     color: white;
-    border-radius: 9px;
-    font-size: 10px;
+    border-radius: 10px;
+    font-size: 11px;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 5px;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-    border: 2px solid var(--circles-bg-strong);
-
-    z-index: 1001;
+    padding: 0 6px;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+    border: 2px solid rgba(18, 18, 23, 1);
+    pointer-events: none;
+    z-index: 10;
     animation: circles-pulse-notification 2s ease-in-out infinite;
 }
 
@@ -505,6 +510,38 @@
     font-size: 0.9rem;
     transition: all 0.2s;
     display: block;
+}
+
+/* SELECT específico - forzar tema oscuro SIEMPRE */
+select.circles-form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #f5f5f5 !important;
+}
+
+select.circles-form-input:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-color: var(--circles-primary);
+}
+
+select.circles-form-input:focus {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-color: var(--circles-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Opciones del select - forzar tema oscuro */
+select.circles-form-input option {
+    background-color: #1a1a1f !important;
+    color: #f5f5f5 !important;
+    padding: 0.75rem !important;
 }
 
 .circles-form-input:focus,

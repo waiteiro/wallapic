@@ -102,11 +102,12 @@ class CirclesManager {
 
         if (circleError) throw circleError;
 
-        // Obtener miembros
+        // Obtener miembros con información de usuarios
         const { data: members, error: membersError } = await supabaseClient
             .from('circle_members')
             .select('*, users(username, avatar)')
-            .eq('circle_id', circleId);
+            .eq('circle_id', circleId)
+            .order('joined_at', { ascending: true });
 
         if (membersError) throw membersError;
 
@@ -127,6 +128,50 @@ class CirclesManager {
     }
 
     async leaveCircle(circleId) {
+        // 1. Verificar si soy admin
+        const { data: myMembership } = await supabaseClient
+            .from('circle_members')
+            .select('role')
+            .eq('circle_id', circleId)
+            .eq('user_id', this.currentUserId)
+            .single();
+
+        const isAdmin = myMembership?.role === 'admin';
+
+        // 2. Si soy admin, verificar si hay otros admins y otros miembros
+        if (isAdmin) {
+            const { data: allMembers } = await supabaseClient
+                .from('circle_members')
+                .select('user_id, role, joined_at')
+                .eq('circle_id', circleId)
+                .order('joined_at', { ascending: true });
+
+            // Contar otros admins (excluyéndome)
+            const otherAdmins = allMembers.filter(m => m.role === 'admin' && m.user_id !== this.currentUserId);
+            
+            // Si NO hay otros admins, transferir al miembro más antiguo
+            if (otherAdmins.length === 0) {
+                const otherMembers = allMembers.filter(m => m.user_id !== this.currentUserId);
+                
+                if (otherMembers.length > 0) {
+                    // Transferir admin al miembro más antiguo
+                    await supabaseClient
+                        .from('circle_members')
+                        .update({ role: 'admin' })
+                        .eq('circle_id', circleId)
+                        .eq('user_id', otherMembers[0].user_id);
+                } else {
+                    // Soy el único miembro, eliminar el círculo
+                    await supabaseClient
+                        .from('circles')
+                        .delete()
+                        .eq('id', circleId);
+                    return; // Salir porque el círculo ya no existe
+                }
+            }
+        }
+
+        // 3. Eliminar mi membresía
         const { error } = await supabaseClient
             .from('circle_members')
             .delete()
@@ -188,6 +233,26 @@ class CirclesManager {
 
         if (existing) {
             throw new Error('El usuario ya es miembro del círculo');
+        }
+
+        // Verificar que el círculo no esté lleno
+        const { data: circle, error: circleError } = await supabaseClient
+            .from('circles')
+            .select('max_members')
+            .eq('id', circleId)
+            .single();
+
+        if (circleError) throw circleError;
+
+        const { data: members, error: membersError } = await supabaseClient
+            .from('circle_members')
+            .select('id')
+            .eq('circle_id', circleId);
+
+        if (membersError) throw membersError;
+
+        if (members && members.length >= circle.max_members) {
+            throw new Error('El círculo está lleno. No se pueden enviar más invitaciones.');
         }
 
         // Crear invitación
@@ -321,7 +386,7 @@ class CirclesManager {
         return data || null;
     }
 
-    async proposeChallenge(circleId, image) {
+    async proposeChallenge(circleId, image, deadlineHours = 24) {
         if (!this.currentUserId) {
             throw new Error('Usuario no autenticado');
         }
@@ -332,9 +397,9 @@ class CirclesManager {
             throw new Error('Ya hay un ejercicio activo en este círculo');
         }
 
-        // Crear nuevo ejercicio (deadline: 24 horas)
+        // Crear nuevo ejercicio con deadline configurable
         const deadline = new Date();
-        deadline.setHours(deadline.getHours() + 24);
+        deadline.setHours(deadline.getHours() + deadlineHours);
 
         const { data, error } = await supabaseClient
             .from('circle_challenges')

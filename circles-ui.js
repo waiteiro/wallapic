@@ -9,6 +9,7 @@ class CirclesUI {
         this.currentCircleId = null;
         this.currentChallengeId = null;
         this.currentView = 'list'; // 'list', 'detail', 'create'
+        this.countdownInterval = null;
     }
 
     // ========================================
@@ -109,6 +110,12 @@ class CirclesUI {
     }
 
     close() {
+        // Limpiar contador si existe
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
+        }
+
         this.modal.classList.remove('circles-show');
         this.currentCircleId = null;
         this.currentChallengeId = null;
@@ -272,12 +279,28 @@ class CirclesUI {
         this.currentView = 'detail';
         this.currentCircleId = circleId;
 
+        // Detener cualquier contador previo
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
+        }
+
         const content = document.getElementById('circlesContent');
         content.innerHTML = '<div class="circles-loading"><div class="circles-loading-spinner"></div><p>Cargando círculo...</p></div>';
 
         try {
             const circle = await circlesManager.getCircleDetails(circleId);
-            const activeChallenge = circle.activeChallenge;
+            let activeChallenge = circle.activeChallenge;
+
+            // Verificar deadline si hay challenge activo
+            if (activeChallenge && activeChallenge.status === 'active') {
+                const wasRevealed = await circlesManager.checkAndRevealEntries(activeChallenge.id, circleId);
+                if (wasRevealed) {
+                    // Recargar circle para obtener challenge actualizado
+                    const updatedCircle = await circlesManager.getCircleDetails(circleId);
+                    activeChallenge = updatedCircle.activeChallenge;
+                }
+            }
 
             this.setTitle(circle.name, true);
 
@@ -320,6 +343,11 @@ class CirclesUI {
 
             html += '</div>';
             content.innerHTML = html;
+
+            // Iniciar contador en tiempo real si hay challenge activo no revelado
+            if (activeChallenge && activeChallenge.status === 'active') {
+                this.startCountdownTimer(activeChallenge.deadline, activeChallenge.id);
+            }
         } catch (error) {
             console.error('Error loading circle detail:', error);
             content.innerHTML = '<div class="circles-empty"><p class="circles-empty-title">Error al cargar el círculo</p></div>';
@@ -731,6 +759,18 @@ class CirclesUI {
                 <!-- Image preview or gallery will be rendered here -->
             </div>
 
+            <div class="circles-form-group">
+                <label class="circles-form-label" for="deadlineSelect">⏰ Tiempo límite para escribir</label>
+                <select id="deadlineSelect" class="circles-form-input">
+                    <option value="1">1 hora</option>
+                    <option value="8">8 horas</option>
+                    <option value="12">12 horas</option>
+                    <option value="24" selected>24 horas (1 día)</option>
+                    <option value="72">72 horas (3 días)</option>
+                </select>
+                <small class="circles-form-hint">Las entradas se revelarán cuando todos completen o pase este tiempo</small>
+            </div>
+
             <div class="circles-form-actions">
                 <button class="circles-btn circles-btn-secondary" onclick="circlesUI.showCircleDetail('${this.currentCircleId}')">Cancelar</button>
                 <button class="circles-btn circles-btn-primary" id="submitProposalBtn" onclick="circlesUI.submitProposal()">Proponer Esta Imagen</button>
@@ -857,6 +897,9 @@ class CirclesUI {
             return;
         }
 
+        // Obtener deadline seleccionado
+        const deadlineHours = parseInt(document.getElementById('deadlineSelect')?.value || 24);
+
         // Validate no active challenge exists
         try {
             const activeChallenge = await circlesManager.getActiveChallenge(this.currentCircleId);
@@ -878,7 +921,7 @@ class CirclesUI {
         }
 
         try {
-            await circlesManager.proposeChallenge(this.currentCircleId, this.selectedImage);
+            await circlesManager.proposeChallenge(this.currentCircleId, this.selectedImage, deadlineHours);
             this.showToast('✅ Ejercicio propuesto exitosamente!', 'success');
             await this.showCircleDetail(this.currentCircleId);
         } catch (error) {
@@ -1021,6 +1064,8 @@ class CirclesUI {
             const circle = await circlesManager.getCircleDetails(this.currentCircleId);
             const memberCount = circle.members.length;
             const maxMembers = circle.max_members;
+            const isFull = memberCount >= maxMembers;
+            const isAlmostFull = memberCount >= maxMembers - 2; // 10 o más de 12
             
             const modalHTML = `
                 <div class="circles-invite-modal" onclick="this.remove()">
@@ -1030,15 +1075,28 @@ class CirclesUI {
                             <button class="circles-close-btn" onclick="this.closest('.circles-invite-modal').remove()">&times;</button>
                         </div>
                         <div class="circles-invite-body">
-                            <div class="circles-form-group">
-                                <label class="circles-form-label" for="inviteUsername">Nombre de usuario</label>
-                                <input type="text" id="inviteUsername" class="circles-form-input" placeholder="@username">
-                                <small class="circles-form-hint">Escribe el nombre de usuario sin el @</small>
-                            </div>
+                            ${isFull ? `
+                                <div style="padding: 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; margin-bottom: 1rem;">
+                                    <p style="color: var(--circles-danger); font-size: 0.875rem; margin: 0; line-height: 1.5;">
+                                        <strong>⚠️ Círculo lleno</strong><br>
+                                        Este círculo ha alcanzado el límite máximo de ${maxMembers} miembros. No se pueden enviar más invitaciones.
+                                    </p>
+                                </div>
+                            ` : ''}
                             
-                            <div style="padding: 0.75rem; background: var(--circles-bg-light); border-radius: 8px; margin-bottom: 1rem;">
-                                <span class="circles-members-count" style="font-size: 0.875rem; color: var(--circles-text-secondary);">
+                            ${!isFull ? `
+                                <div class="circles-form-group">
+                                    <label class="circles-form-label" for="inviteUsername">Nombre de usuario</label>
+                                    <input type="text" id="inviteUsername" class="circles-form-input" placeholder="@username" ${isFull ? 'disabled' : ''}>
+                                    <small class="circles-form-hint">Escribe el nombre de usuario sin el @</small>
+                                </div>
+                            ` : ''}
+                            
+                            <div style="padding: 0.75rem; background: ${isFull ? 'rgba(239, 68, 68, 0.05)' : isAlmostFull ? 'rgba(239, 180, 68, 0.1)' : 'var(--circles-bg-light)'}; border-radius: 8px; margin-bottom: 1rem;">
+                                <span class="circles-members-count" style="font-size: 0.875rem; color: ${isFull ? 'var(--circles-danger)' : isAlmostFull ? 'var(--circles-warning)' : 'var(--circles-text-secondary)'};">
                                     <strong>${memberCount}/${maxMembers}</strong> miembros en este círculo
+                                    ${isAlmostFull && !isFull ? ' (casi lleno)' : ''}
+                                    ${isFull ? ' (LLENO)' : ''}
                                 </span>
                             </div>
                             
@@ -1049,15 +1107,23 @@ class CirclesUI {
                                 </div>
                             </div>
                             
-                            <button class="circles-btn circles-btn-primary" style="width: 100%;" id="sendInviteBtn" onclick="circlesUI.sendInvite()">
-                                Enviar Invitación
-                            </button>
+                            ${!isFull ? `
+                                <button class="circles-btn circles-btn-primary" style="width: 100%;" id="sendInviteBtn" onclick="circlesUI.sendInvite()">
+                                    Enviar Invitación
+                                </button>
+                            ` : `
+                                <button class="circles-btn circles-btn-secondary" style="width: 100%;" onclick="this.closest('.circles-invite-modal').remove()">
+                                    Cerrar
+                                </button>
+                            `}
                         </div>
                     </div>
                 </div>
             `;
             document.body.insertAdjacentHTML('beforeend', modalHTML);
-            setTimeout(() => document.getElementById('inviteUsername')?.focus(), 100);
+            if (!isFull) {
+                setTimeout(() => document.getElementById('inviteUsername')?.focus(), 100);
+            }
         } catch (error) {
             console.error('Error loading circle details for invite:', error);
             this.showToast('Error al cargar detalles del círculo', 'error');
@@ -1116,8 +1182,8 @@ class CirclesUI {
                     errorMessage = 'Usuario no encontrado. Verifica el nombre de usuario.';
                 } else if (error.message.includes('ya es miembro')) {
                     errorMessage = 'Este usuario ya es miembro del círculo.';
-                } else if (error.message.includes('lleno')) {
-                    errorMessage = 'El círculo ha alcanzado el límite de 12 miembros.';
+                } else if (error.message.includes('lleno') || error.message.includes('No se pueden enviar más invitaciones')) {
+                    errorMessage = 'El círculo está lleno (12/12 miembros). No se pueden enviar más invitaciones.';
                 } else {
                     errorMessage = error.message;
                 }
@@ -1140,6 +1206,17 @@ class CirclesUI {
             const myMember = circle.members.find(m => m.userId === (this.currentUserId || window.currentUser.id));
             const isAdmin = myMember?.role === 'admin';
             const isOnlyMember = circle.members.length === 1;
+            
+            // Verificar si hay otros admins
+            const otherAdmins = circle.members.filter(m => m.role === 'admin' && m.userId !== (this.currentUserId || window.currentUser.id));
+            const hasOtherAdmin = otherAdmins.length > 0;
+            
+            // Encontrar miembro más antiguo (excluyéndome)
+            const otherMembers = circle.members
+                .filter(m => m.userId !== (this.currentUserId || window.currentUser.id))
+                .sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt));
+            
+            const oldestMember = otherMembers.length > 0 ? otherMembers[0] : null;
 
             // Create custom circles confirmation modal
             const modalHTML = `
@@ -1154,11 +1231,11 @@ class CirclesUI {
                                 ¿Estás seguro que quieres salir de <strong>"${circle.name}"</strong>?
                             </p>
                             
-                            ${isAdmin && !isOnlyMember ? `
-                                <div style="padding: 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; margin-bottom: 1rem;">
-                                    <p style="color: var(--circles-danger); font-size: 0.875rem; margin: 0; line-height: 1.5;">
-                                        <strong>⚠️ Eres el administrador</strong><br>
-                                        Si sales, los derechos de administrador se transferirán automáticamente al miembro más antiguo del círculo.
+                            ${isAdmin && !isOnlyMember && !hasOtherAdmin && oldestMember ? `
+                                <div style="padding: 1rem; background: rgba(239, 180, 68, 0.1); border: 1px solid rgba(239, 180, 68, 0.3); border-radius: 8px; margin-bottom: 1rem;">
+                                    <p style="color: var(--circles-warning); font-size: 0.875rem; margin: 0; line-height: 1.5;">
+                                        <strong>⚠️ Transferencia de Admin</strong><br>
+                                        Se transferirá el rol de administrador al miembro más antiguo: <strong>@${oldestMember.username}</strong>
                                     </p>
                                 </div>
                             ` : ''}
@@ -1540,6 +1617,60 @@ class CirclesUI {
     // ========================================
     // UTILIDADES
     // ========================================
+
+    startCountdownTimer(deadline, challengeId) {
+        // Clear any existing timer
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+        }
+
+        // Función para actualizar el display
+        const updateDisplay = () => {
+            const now = new Date();
+            const timeLeft = new Date(deadline) - now;
+            
+            if (timeLeft <= 0) {
+                clearInterval(this.countdownInterval);
+                // Recargar vista porque el deadline pasó
+                this.showCircleDetail(this.currentCircleId);
+                return;
+            }
+
+            const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+
+            let displayText = '';
+            if (days > 0) {
+                displayText = `${days}d ${hours}h restantes`;
+            } else if (hours > 0) {
+                displayText = `${hours}h ${minutes}m restantes`;
+            } else {
+                displayText = `${minutes}m restantes`;
+            }
+
+            const timerEl = document.querySelector('.circles-challenge-timer span');
+            if (timerEl) {
+                timerEl.textContent = displayText;
+            }
+
+            // Actualizar clase urgente si queda menos de 1 hora
+            const timerContainer = document.querySelector('.circles-challenge-timer');
+            if (timerContainer) {
+                if (timeLeft <= 3600000) { // 1 hora en milisegundos
+                    timerContainer.classList.add('circles-urgent');
+                } else {
+                    timerContainer.classList.remove('circles-urgent');
+                }
+            }
+        };
+
+        // Actualizar inmediatamente
+        updateDisplay();
+
+        // Actualizar cada minuto
+        this.countdownInterval = setInterval(updateDisplay, 60000);
+    }
 
     getAvatarColor(username) {
         const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#3b82f6', '#ef4444', '#14b8a6'];
