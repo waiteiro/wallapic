@@ -89,7 +89,8 @@ const archiveManager = {
             return;
         }
         
-        archiveList.innerHTML = '<p style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.5);">Cargando favoritos...</p>';
+        // Mostrar skeleton
+        archiveList.innerHTML = SkeletonUtils.archiveSkeleton(6);
         
         const favorites = await window.loadFavorites();
         
@@ -502,6 +503,23 @@ const archiveManager = {
     renderListView() {
         const archiveList = document.getElementById('archiveList');
         if (!archiveList) return;
+        
+        // Mostrar skeleton si es la primera carga
+        if (this.displayedEntries.length === 0 && this.filteredEntries.length > 0) {
+            archiveList.innerHTML = SkeletonUtils.archiveSkeleton(this.itemsPerPage);
+            // Usar setTimeout para que se vea el skeleton antes de renderizar
+            setTimeout(() => {
+                this.renderListViewContent();
+            }, 100);
+            return;
+        }
+        
+        this.renderListViewContent();
+    },
+    
+    renderListViewContent() {
+        const archiveList = document.getElementById('archiveList');
+        if (!archiveList) return;
 
         if (this.filteredEntries.length === 0) {
             archiveList.innerHTML = `
@@ -661,16 +679,24 @@ const archiveManager = {
         const daysInMonth = lastDay.getDate();
         const startingDayOfWeek = firstDay.getDay();
 
+        // Usar TODAS las entradas (no filtradas) para calendario completo
+        const allEntries = currentState.entries.filter(e => !e.isArchived);
+        
         // Obtener entradas del mes actual
-        const entriesInMonth = this.filteredEntries.filter(entry => {
-            const entryDate = new Date(entry.date);
-            return entryDate.getMonth() === month && entryDate.getFullYear() === year;
+        const entriesInMonth = allEntries.filter(entry => {
+            // Extraer solo la fecha sin conversión de zona horaria
+            const [datePart] = entry.date.split('T');
+            const [entryYear, entryMonth, entryDay] = datePart.split('-').map(Number);
+            return entryMonth - 1 === month && entryYear === year;
         });
 
         // Crear mapa de entradas por día
         const entriesByDay = {};
         entriesInMonth.forEach(entry => {
-            const day = new Date(entry.date).getDate();
+            // Extraer solo la fecha sin conversión de zona horaria
+            const [datePart] = entry.date.split('T');
+            const [entryYear, entryMonth, entryDay] = datePart.split('-').map(Number);
+            const day = entryDay;
             if (!entriesByDay[day]) entriesByDay[day] = [];
             entriesByDay[day].push(entry);
         });
@@ -720,6 +746,7 @@ const archiveManager = {
                             ${entries.slice(0, 3).map(entry => 
                                 `<div class="calendar-day-dot"></div>`
                             ).join('')}
+                            ${entries.length > 3 ? `<div class="calendar-day-more">+${entries.length - 3}</div>` : ''}
                         </div>
                     ` : ''}
                 </div>
@@ -739,10 +766,12 @@ const archiveManager = {
         const archiveList = document.getElementById('archiveList');
         if (!archiveList) return;
         
+        // Usar TODAS las entradas (no archivadas)
+        const allEntries = currentState.entries.filter(e => !e.isArchived);
+        
         // HOY
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const todayKey = today.toISOString().split('T')[0];
         
         // Empezar hace 52 semanas desde HOY
         const startDate = new Date(today);
@@ -752,25 +781,17 @@ const archiveManager = {
         const dayOffset = startDate.getDay();
         startDate.setDate(startDate.getDate() - dayOffset);
         
-        // Calcular cuántas semanas necesitamos para llegar a HOY
+        // Calcular cuántas semanas necesitamos
         const daysDiff = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-        const weeks = Math.ceil(daysDiff / 7) + 1; // +1 para asegurar que incluye hoy
+        const weeks = Math.ceil(daysDiff / 7) + 1;
 
-        console.log('🔍 HEATMAP:');
-        console.log('HOY:', todayKey, '- Día de semana:', today.getDay());
-        console.log('INICIO:', startDate.toISOString().split('T')[0]);
-        console.log('Días de diferencia:', daysDiff);
-        console.log('SEMANAS a generar:', weeks);
-
-        // Crear mapa de entradas
+        // Crear mapa de entradas por fecha (formato YYYY-MM-DD)
         const entriesByDate = {};
-        currentState.entries.forEach(entry => {
-            const dateKey = entry.date.split('T')[0];
+        allEntries.forEach(entry => {
+            const entryDate = new Date(entry.date);
+            const dateKey = entryDate.toISOString().split('T')[0];
             entriesByDate[dateKey] = (entriesByDate[dateKey] || 0) + 1;
         });
-
-        console.log('Entradas mapeadas:', entriesByDate);
-        console.log('¿Tiene hoy?:', todayKey, '=', entriesByDate[todayKey]);
 
         // Calcular niveles
         const counts = Object.values(entriesByDate);
@@ -780,7 +801,7 @@ const archiveManager = {
             <div class="archive-heatmap">
                 <div class="heatmap-header">
                     <div class="heatmap-title">Último año de escritura</div>
-                    <div class="heatmap-subtitle">${currentState.entries.length} entradas totales</div>
+                    <div class="heatmap-subtitle">${allEntries.length} entradas totales</div>
                 </div>
                 <div class="heatmap-wrapper">
                     <div class="heatmap-days">
@@ -796,7 +817,7 @@ const archiveManager = {
         `;
 
         let cellsGenerated = 0;
-        let todayFound = false;
+        let cellsWithData = 0;
 
         // Generar semanas
         for (let week = 0; week < weeks; week++) {
@@ -805,18 +826,18 @@ const archiveManager = {
             for (let day = 0; day < 7; day++) {
                 const cellDate = new Date(startDate);
                 cellDate.setDate(startDate.getDate() + cellsGenerated);
+                cellDate.setHours(0, 0, 0, 0); // Normalizar horas para comparación correcta
                 cellsGenerated++;
                 
                 const dateKey = cellDate.toISOString().split('T')[0];
                 const isFuture = cellDate > today;
-                const isToday = dateKey === todayKey;
-                
-                if (isToday) {
-                    todayFound = true;
-                    console.log(`✅✅✅ HOY ENCONTRADO en semana ${week}, día ${day}: ${dateKey}`);
-                }
+                const isToday = dateKey === today.toISOString().split('T')[0];
                 
                 const count = entriesByDate[dateKey] || 0;
+                
+                if (count > 0) {
+                    cellsWithData++;
+                }
                 
                 let bgColor = 'rgba(255,255,255,0.03)';
                 let borderColor = 'rgba(255,255,255,0.05)';
@@ -824,7 +845,6 @@ const archiveManager = {
                 
                 if (count > 0 && !isFuture) {
                     level = Math.min(Math.ceil((count / maxEntries) * 4), 4);
-                    console.log(`🎯 ${dateKey} tiene ${count} entradas - LEVEL ${level}`);
                     
                     switch(level) {
                         case 1: bgColor = 'rgba(74, 158, 255, 0.4)'; borderColor = 'rgba(74, 158, 255, 0.6)'; break;
@@ -843,29 +863,24 @@ const archiveManager = {
 
                 heatmapHTML += `
                     <div class="heatmap-cell level-${level} ${isToday ? 'today' : ''}" 
-                         style="background: ${bgColor} !important; border: 1px solid ${borderColor} !important;"
+                         style="background: ${bgColor}; border: 1px solid ${borderColor};"
                          title="${formattedDate}: ${count} entrada${count !== 1 ? 's' : ''}${isToday ? ' (HOY)' : ''}"
                          ${count > 0 && !isFuture ? `onclick="archiveManager.showDateEntries('${dateKey}')"` : ''}>
                     </div>
                 `;
                 
-                // Si ya pasamos de hoy, salir
-                if (cellDate >= today && week > 0) break;
+                // Si ya estamos en el futuro, salir
+                if (isFuture) break;
             }
             
             heatmapHTML += '</div>';
-            
-            // Si ya encontramos hoy, terminar
-            if (todayFound) break;
         }
-
-        console.log('¿Se encontró HOY?:', todayFound);
-        console.log('Celdas generadas:', cellsGenerated);
 
         heatmapHTML += `
                     </div>
                 </div>
                 <div class="heatmap-legend">
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); margin-right: 0.5rem;">Menos</span>
                     <div class="heatmap-legend-scale">
                         <div class="heatmap-legend-cell level-0"></div>
                         <div class="heatmap-legend-cell level-1"></div>
@@ -873,13 +888,12 @@ const archiveManager = {
                         <div class="heatmap-legend-cell level-3"></div>
                         <div class="heatmap-legend-cell level-4"></div>
                     </div>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;">Más</span>
                 </div>
             </div>
         `;
 
         archiveList.innerHTML = heatmapHTML;
-        
-        console.log('✅ HEATMAP RENDERIZADO');
     },
 
     // Obtener texto preview
@@ -902,11 +916,15 @@ const archiveManager = {
 
     // Mostrar entradas de un día específico
     showDayEntries(day, month, year) {
-        const entries = this.filteredEntries.filter(entry => {
-            const entryDate = new Date(entry.date);
-            return entryDate.getDate() === day && 
-                   entryDate.getMonth() === month && 
-                   entryDate.getFullYear() === year;
+        // Usar currentState.entries no archivadas en lugar de filteredEntries
+        const allNonArchivedEntries = currentState.entries.filter(e => !e.isArchived);
+        const entries = allNonArchivedEntries.filter(entry => {
+            // Extraer solo la fecha sin conversión de zona horaria
+            const [datePart] = entry.date.split('T');
+            const [entryYear, entryMonth, entryDay] = datePart.split('-').map(Number);
+            return entryDay === day && 
+                   entryMonth - 1 === month && 
+                   entryYear === year;
         });
 
         if (entries.length === 1) {
@@ -919,7 +937,7 @@ const archiveManager = {
             });
             
             const targetDate = new Date(year, month, day).toISOString().split('T')[0];
-            this.filteredEntries = this.filteredEntries.filter(entry => 
+            this.filteredEntries = allNonArchivedEntries.filter(entry => 
                 entry.date.split('T')[0] === targetDate
             );
             this.renderListView();
@@ -928,12 +946,23 @@ const archiveManager = {
 
     // Mostrar entradas de una fecha específica (desde heatmap)
     showDateEntries(dateStr) {
-        const entries = this.filteredEntries.filter(entry => 
+        // Usar currentState.entries no archivadas en lugar de filteredEntries
+        const allNonArchivedEntries = currentState.entries.filter(e => !e.isArchived);
+        const entries = allNonArchivedEntries.filter(entry => 
             entry.date.split('T')[0] === dateStr
         );
 
         if (entries.length === 1) {
             viewEntry(entries[0].id);
+        } else if (entries.length > 1) {
+            // Cambiar a vista lista con filtro de esa fecha
+            this.currentView = 'list';
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.view === 'list');
+            });
+            
+            this.filteredEntries = entries;
+            this.renderListView();
         }
     },
 

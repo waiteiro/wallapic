@@ -31,7 +31,7 @@ function getDailyMultiChallenge() {
     // Si ya tenemos el reto del día en memoria, devolverlo
     if (dailyMultiChallenge) return dailyMultiChallenge;
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = window.getLocalDateString();
     
     // Verificar si ya tenemos un reto guardado para hoy
     try {
@@ -271,13 +271,85 @@ async function markMultiChallengeElementsAsUsed(challenge, entryDate) {
     }
 }
 
+// ============================================
+// TRACKING DE RETOS MULTI COMPLETADOS
+// ============================================
+
+// Cargar retos multi completados
+function loadCompletedMultiChallenges() {
+    try {
+        const stored = localStorage.getItem('wallapic_completed_multi_challenges');
+        return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+        console.error('Error cargando retos multi completados:', error);
+        return [];
+    }
+}
+
+// Guardar reto multi completado
+async function saveCompletedMultiChallenge(challenge, entryDate) {
+    try {
+        const completed = loadCompletedMultiChallenges();
+        
+        const record = {
+            type: challenge.type,
+            description: challenge.description,
+            date: entryDate,
+            completedAt: new Date().toISOString()
+        };
+        
+        completed.push(record);
+        localStorage.setItem('wallapic_completed_multi_challenges', JSON.stringify(completed));
+        
+        // Si hay usuario logueado, guardar también en Supabase
+        if (window.currentUser && window.supabaseClient) {
+            await window.supabaseClient
+                .from('completed_multi_challenges')
+                .insert([{
+                    user_id: window.currentUser.id,
+                    challenge_type: challenge.type,
+                    challenge_description: challenge.description,
+                    completed_at: record.completedAt
+                }]);
+        }
+        
+        console.log('✅ Reto multi guardado en tracking');
+        return true;
+    } catch (error) {
+        console.error('Error guardando reto multi:', error);
+        return false;
+    }
+}
+
+// Cargar desde Supabase (para usuarios logueados)
+async function loadCompletedMultiChallengesFromSupabase() {
+    if (!window.currentUser || !window.supabaseClient) return [];
+    
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('completed_multi_challenges')
+            .select('*')
+            .eq('user_id', window.currentUser.id)
+            .order('completed_at', { ascending: false });
+        
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error('Error cargando retos multi desde Supabase:', error);
+        return [];
+    }
+}
+
 // Exportar funciones globales
 window.challengesLevel3 = {
     types: MULTI_CHALLENGE_TYPES,
     isLevel3Enabled,
     getDailyMultiChallenge,
     checkMultiChallengeCompletion,
-    markMultiChallengeElementsAsUsed
+    markMultiChallengeElementsAsUsed,
+    loadCompletedMultiChallenges,
+    saveCompletedMultiChallenge,
+    loadCompletedMultiChallengesFromSupabase
 };
 
 console.log('✅ Sistema de retos nivel 3 (multi-elemento) preparado');

@@ -41,7 +41,7 @@ let timerState = {
 
 // Obtener variación del día
 function getDailyVariation() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = window.getLocalDateString();
     const seed = hashDateToNumber(today);
     
     // Verificar si tiene nivel 2 activo (racha >= 7)

@@ -129,6 +129,14 @@
     transition: all 0.3s ease;
 }
 
+/* Ajuste para tema claro - MUY IMPORTANTE */
+[data-theme="light"] .image-limit-indicator {
+    color: #000000 !important;
+    background: #e0e0e0 !important;
+    border-color: #cccccc !important;
+    font-weight: 600 !important;
+}
+
 /* Tabs modernos */
 .image-bank-tabs {
     display: flex;
@@ -797,4 +805,139 @@
     .image-name-modal {
         max-width: 95%;
     }
+}
+
+
+/* ============================================
+   AJUSTES PARA TEMA CLARO
+   ============================================ */
+
+[data-theme="light"] .image-bank-modal .modal-header {
+    border-bottom-color: var(--border);
+}
+
+[data-theme="light"] .stat-value {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+[data-theme="light"] .stat-label {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+[data-theme="light"] .image-limit-indicator {
+    color: #000000 !important;
+    background: #e0e0e0 !important;
+    border-color: #cccccc !important;
+    font-weight: 600 !important;
+}
+
+
+[data-theme="light"] .image-bank-tabs {
+    border-bottom-color: var(--border);
+}
+
+[data-theme="light"] .image-bank-tab {
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .image-bank-tab:hover {
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .image-bank-tab.active {
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .image-bank-tab::after {
+    background: var(--accent);
+}
+
+[data-theme="light"] .image-bank-item {
+    background: var(--bg-secondary);
+    border-color: var(--border);
+}
+
+[data-theme="light"] .image-bank-item:hover {
+    border-color: var(--accent);
+    box-shadow: 0 6px 20px rgba(74, 158, 255, 0.15);
+}
+
+[data-theme="light"] .image-bank-item.loading-placeholder {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="light"] .loading-spinner {
+    border-color: var(--border);
+    border-top-color: var(--accent);
+}
+
+[data-theme="light"] .image-bank-modal .modal-body::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="light"] .image-bank-modal .modal-body::-webkit-scrollbar-thumb {
+    background: var(--border);
+}
+
+[data-theme="light"] .image-bank-modal .modal-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+[data-theme="light"] .floating-upload-btn {
+    background: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(74, 158, 255, 0.3);
+}
+
+[data-theme="light"] .floating-upload-btn:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 6px 24px rgba(74, 158, 255, 0.4);
+}
+
+[data-theme="light"] .empty-state {
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .empty-state p:first-of-type {
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .empty-hint {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+[data-theme="light"] .image-name-modal .modal-header {
+    border-bottom-color: var(--border);
+}
+
+[data-theme="light"] .image-name-modal .modal-header h3 {
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .image-name-input {
+    background: var(--bg-secondary);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .image-name-input:focus {
+    background: var(--bg-tertiary);
+    border-color: var(--accent);
+}
+
+[data-theme="light"] .image-name-input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.5;
+}
+
+[data-theme="light"] .btn-confirm-full {
+    background: var(--accent);
+    color: #ffffff;
+}
+
+[data-theme="light"] .btn-confirm-full:hover {
+    background: var(--accent-hover);
 }

@@ -819,19 +819,30 @@ class ImageBankUI {
         if (limitIndicator) {
             limitIndicator.textContent = `${stats.total}/${maxImages}`;
             
-            // Cambiar color según proximidad al límite
+            // Obtener el tema actual
+            const isDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
+            
+            // Cambiar color según proximidad al límite y tema
             if (stats.total >= maxImages) {
-                limitIndicator.style.color = 'rgba(239, 68, 68, 0.9)'; // Rojo
+                limitIndicator.style.color = 'rgba(239, 68, 68, 0.9)'; // Rojo (mismo en ambos temas)
             } else if (stats.total >= 90) {
-                limitIndicator.style.color = 'rgba(251, 191, 36, 0.9)'; // Amarillo
+                limitIndicator.style.color = 'rgba(251, 191, 36, 0.9)'; // Amarillo (mismo en ambos temas)
             } else {
-                limitIndicator.style.color = 'rgba(255, 255, 255, 0.4)'; // Gris normal
+                // Color normal según tema
+                limitIndicator.style.color = isDarkTheme ? 'rgba(255, 255, 255, 0.4)' : '#000000';
             }
         }
     }
 
     renderAvailableImages() {
         const grid = document.getElementById('availableImagesGrid');
+        
+        // Mostrar skeleton mientras se determina si hay imágenes
+        if (!this.imageBank.images) {
+            grid.innerHTML = SkeletonUtils.imageBankSkeleton(12);
+            return;
+        }
+        
         const images = this.imageBank.getAvailableImages();
 
         if (images.length === 0) {
@@ -882,6 +893,13 @@ class ImageBankUI {
 
     renderUsedImages() {
         const grid = document.getElementById('usedImagesGrid');
+        
+        // Mostrar skeleton mientras se determina si hay imágenes
+        if (!this.imageBank.images) {
+            grid.innerHTML = SkeletonUtils.imageBankSkeleton(12);
+            return;
+        }
+        
         const images = this.imageBank.getUsedImages();
 
         if (images.length === 0) {

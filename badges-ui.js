@@ -12,8 +12,8 @@ async function openBadgesModal() {
         return;
     }
     
-    // Mostrar loader
-    content.innerHTML = '<p style="text-align: center; padding: 2rem;">Cargando recompensas...</p>';
+    // Mostrar skeleton mientras carga
+    content.innerHTML = SkeletonUtils.badgesSkeleton(16);
     modal.classList.add('active');
     
     // Renderizar badges

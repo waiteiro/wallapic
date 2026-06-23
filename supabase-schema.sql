@@ -3,12 +3,14 @@
 -- Ejecuta este script en el SQL Editor de tu proyecto Supabase
 
 -- LIMPIAR TABLAS EXISTENTES (esto eliminará automáticamente las políticas)
+drop table if exists circle_challenge_comments cascade;
 drop table if exists circle_entry_likes cascade;
-drop table if exists circle_entry_comments cascade;
-drop table if exists circle_weekly_entries cascade;
+drop table if exists circle_challenge_entries cascade;
+drop table if exists circle_challenges cascade;
 drop table if exists circle_members cascade;
 drop table if exists circle_invitations cascade;
 drop table if exists circles cascade;
+drop table if exists completed_multi_challenges cascade;
 drop table if exists user_badges cascade;
 drop table if exists badges cascade;
 drop table if exists favorites cascade;
@@ -45,6 +47,9 @@ create table entries (
   char_count integer,
   is_public boolean default false, -- false = privada, true = pública
   is_archived boolean default false, -- false = activa, true = archivada
+  writing_seconds integer, -- Tiempo de escritura interno (segundos)
+  completed_with_timer boolean default false, -- Metadata: entrada completada con timer
+  timer_seconds_used integer, -- Metadata: segundos usados en el timer (null si no usó timer)
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -113,18 +118,31 @@ create table user_badges (
   unique(user_id, badge_id)
 );
 
+-- Tabla de retos multi-elemento completados
+create table completed_multi_challenges (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references users(id) on delete cascade not null,
+  challenge_type text not null, -- 'word_phrase', 'word_length', 'phrase_length'
+  challenge_description text not null,
+  completed_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- ========================================
 -- SISTEMA DE CÍRCULOS PRIVADOS
 -- ========================================
 
 -- Tabla de círculos
+-- LÍMITES:
+-- - Máximo 10 círculos creados por usuario
+-- - Máximo 15 círculos como invitado (25 total incluyendo creados)
+-- - Máximo 12 miembros por círculo
 create table circles (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
   description text,
   creator_id uuid references users(id) on delete cascade not null,
   cover_color text default '#6366f1', -- Color de fondo del círculo
-  max_members integer default 10, -- Límite de miembros
+  max_members integer default 12 check (max_members <= 12), -- Límite de miembros (máximo 12)
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -149,34 +167,47 @@ create table circle_invitations (
   responded_at timestamp with time zone
 );
 
--- Tabla de entradas semanales del círculo (imagen compartida)
-create table circle_weekly_entries (
+-- Tabla de ejercicios de imagen del círculo (imagen compartida por todos)
+create table circle_challenges (
   id uuid default uuid_generate_v4() primary key,
+  circle_id uuid references circles(id) on delete cascade not null,
+  proposed_by_user_id uuid references users(id) on delete cascade not null,
+  proposed_by_username text not null,
+  image jsonb not null, -- La imagen del ejercicio
+  status text default 'active' not null, -- 'active', 'revealed'
+  deadline timestamp with time zone not null, -- 24 horas desde creación
+  revealed_at timestamp with time zone, -- Cuándo se reveló
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Tabla de entradas de ejercicio del círculo (cada miembro escribe sobre la imagen)
+create table circle_challenge_entries (
+  id uuid default uuid_generate_v4() primary key,
+  challenge_id uuid references circle_challenges(id) on delete cascade not null,
   circle_id uuid references circles(id) on delete cascade not null,
   user_id uuid references users(id) on delete cascade not null,
   username text not null,
-  week_id text not null, -- Formato: YYYY-WW (ej: 2026-25)
-  image jsonb not null, -- La imagen compartida de la semana
   title text,
   text text not null,
-  is_revealed boolean default false, -- Se revela cuando todos completan o a medianoche
+  word_count integer,
+  is_revealed boolean default false, -- Se revela cuando todos completan o pasa el deadline
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  unique(circle_id, user_id, week_id)
+  unique(challenge_id, user_id)
 );
 
 -- Tabla de likes a entradas del círculo
 create table circle_entry_likes (
   id uuid default uuid_generate_v4() primary key,
-  entry_id uuid references circle_weekly_entries(id) on delete cascade not null,
+  entry_id uuid references circle_challenge_entries(id) on delete cascade not null,
   user_id uuid references users(id) on delete cascade not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   unique(entry_id, user_id)
 );
 
--- Tabla de comentarios a entradas del círculo
-create table circle_entry_comments (
+-- Tabla de comentarios GENERALES del ejercicio (no por entrada individual)
+create table circle_challenge_comments (
   id uuid default uuid_generate_v4() primary key,
-  entry_id uuid references circle_weekly_entries(id) on delete cascade not null,
+  challenge_id uuid references circle_challenges(id) on delete cascade not null,
   user_id uuid references users(id) on delete cascade not null,
   username text not null,
   comment text not null,
@@ -202,10 +233,12 @@ create index circle_members_circle_id_idx on circle_members(circle_id);
 create index circle_members_user_id_idx on circle_members(user_id);
 create index circle_invitations_circle_id_idx on circle_invitations(circle_id);
 create index circle_invitations_invitee_username_idx on circle_invitations(invitee_username);
-create index circle_weekly_entries_circle_id_idx on circle_weekly_entries(circle_id);
-create index circle_weekly_entries_week_id_idx on circle_weekly_entries(week_id);
+create index circle_challenges_circle_id_idx on circle_challenges(circle_id);
+create index circle_challenges_status_idx on circle_challenges(status);
+create index circle_challenge_entries_challenge_id_idx on circle_challenge_entries(challenge_id);
+create index circle_challenge_entries_user_id_idx on circle_challenge_entries(user_id);
 create index circle_entry_likes_entry_id_idx on circle_entry_likes(entry_id);
-create index circle_entry_comments_entry_id_idx on circle_entry_comments(entry_id);
+create index circle_challenge_comments_challenge_id_idx on circle_challenge_comments(challenge_id);
 
 -- Habilitar Row Level Security
 alter table users enable row level security;
@@ -219,9 +252,10 @@ alter table user_badges enable row level security;
 alter table circles enable row level security;
 alter table circle_members enable row level security;
 alter table circle_invitations enable row level security;
-alter table circle_weekly_entries enable row level security;
+alter table circle_challenges enable row level security;
+alter table circle_challenge_entries enable row level security;
 alter table circle_entry_likes enable row level security;
-alter table circle_entry_comments enable row level security;
+alter table circle_challenge_comments enable row level security;
 
 -- Políticas de seguridad para users
 create policy "Anyone can read users"
@@ -384,17 +418,30 @@ create policy "Anyone can delete invitations"
   on circle_invitations for delete
   using (true);
 
--- Políticas de seguridad para circle_weekly_entries
-create policy "Anyone can view circle entries"
-  on circle_weekly_entries for select
+-- Políticas de seguridad para circle_challenges
+create policy "Anyone can view challenges"
+  on circle_challenges for select
   using (true);
 
-create policy "Anyone can create circle entries"
-  on circle_weekly_entries for insert
+create policy "Anyone can create challenges"
+  on circle_challenges for insert
   with check (true);
 
-create policy "Anyone can update circle entries"
-  on circle_weekly_entries for update
+create policy "Anyone can update challenges"
+  on circle_challenges for update
+  using (true);
+
+-- Políticas de seguridad para circle_challenge_entries
+create policy "Anyone can view challenge entries"
+  on circle_challenge_entries for select
+  using (true);
+
+create policy "Anyone can create challenge entries"
+  on circle_challenge_entries for insert
+  with check (true);
+
+create policy "Anyone can update challenge entries"
+  on circle_challenge_entries for update
   using (true);
 
 -- Políticas de seguridad para circle_entry_likes
@@ -410,17 +457,17 @@ create policy "Anyone can delete likes"
   on circle_entry_likes for delete
   using (true);
 
--- Políticas de seguridad para circle_entry_comments
+-- Políticas de seguridad para circle_challenge_comments
 create policy "Anyone can view comments"
-  on circle_entry_comments for select
+  on circle_challenge_comments for select
   using (true);
 
 create policy "Anyone can insert comments"
-  on circle_entry_comments for insert
+  on circle_challenge_comments for insert
   with check (true);
 
 create policy "Anyone can delete comments"
-  on circle_entry_comments for delete
+  on circle_challenge_comments for delete
   using (true);
 
 -- Insertar badges en el catálogo
@@ -484,25 +531,45 @@ insert into badges (id, name, description, icon, category, requirement, sort_ord
 ('all_moods', 'Explorador Emocional', 'Usaste todos los moods', '🎭', 'mood', '{"type": "all_moods_used", "value": true}', 90),
 ('mood_alegre', 'Alma Alegre', '10 entradas con mood alegre', '😊', 'mood', '{"type": "mood_count", "mood": "alegre", "value": 10}', 91),
 ('mood_reflexivo', 'Alma Reflexiva', '10 entradas con mood reflexivo', '🤔', 'mood', '{"type": "mood_count", "mood": "reflexivo", "value": 10}', 92),
-('mood_melancolico', 'Alma Melancólica', '10 entradas con mood melancólico', '😔', 'mood', '{"type": "mood_count", "mood": "melancólico", "value": 10}', 93),
-('mood_energetico', 'Alma Energética', '10 entradas con mood energético', '⚡', 'mood', '{"type": "mood_count", "mood": "energético", "value": 10}', 94),
-('mood_sereno', 'Alma Serena', '10 entradas con mood sereno', '😌', 'mood', '{"type": "mood_count", "mood": "sereno", "value": 10}', 95),
-('mood_caotico', 'Alma Caótica', '10 entradas con mood caótico', '🌪️', 'mood', '{"type": "mood_count", "mood": "caótico", "value": 10}', 96),
+('mood_melancolico', 'Alma Melancólica', '10 entradas con mood melancólico', '🌧️', 'mood', '{"type": "mood_count", "mood": "melancolico", "value": 10}', 93),
+('mood_poderoso', 'Alma Poderosa', '10 entradas con mood poderoso', '💪', 'mood', '{"type": "mood_count", "mood": "poderoso", "value": 10}', 94),
+('mood_nostalgico', 'Alma Nostálgica', '10 entradas con mood nostálgico', '🕰️', 'mood', '{"type": "mood_count", "mood": "nostalgico", "value": 10}', 95),
+('mood_cansado', 'Alma Cansada', '10 entradas con mood cansado', '😴', 'mood', '{"type": "mood_count", "mood": "cansado", "value": 10}', 96),
+('mood_inspirado', 'Alma Inspirada', '10 entradas con mood inspirado', '✨', 'mood', '{"type": "mood_count", "mood": "inspirado", "value": 10}', 97),
+('mood_inquieto', 'Alma Inquieta', '10 entradas con mood inquieto', '😰', 'mood', '{"type": "mood_count", "mood": "inquieto", "value": 10}', 98),
 
 -- BADGES COMPUESTOS
 ('perfectionist', 'Perfeccionista', '50 entradas + 100 palabras promedio', '💯', 'special', '{"type": "composite", "requirements": [{"type": "entry_count", "value": 50}, {"type": "avg_words", "value": 100}]}', 100),
 ('amateur_novelist', 'Novelista Amateur', '10 entradas con +500 palabras', '📝', 'special', '{"type": "long_entries", "length": 500, "value": 10}', 101),
 ('pro_novelist', 'Novelista Profesional', '10 entradas con +1000 palabras', '✍️', 'special', '{"type": "long_entries", "length": 1000, "value": 10}', 102),
 ('epic_entry', 'Épico', 'Una entrada con +2000 palabras', '📜', 'special', '{"type": "single_long_entry", "value": 2000}', 103),
-('perfect_consistency', 'Consistencia Impecable', '30 días consecutivos con 1 entrada cada día', '🎯', 'special', '{"type": "perfect_streak", "value": 30}', 104),
-('extreme_productivity', 'Productividad Extrema', '100 entradas en 30 días', '🚀', 'special', '{"type": "entries_in_period", "entries": 100, "days": 30}', 105),
-('image_collector', 'Coleccionista de Imágenes', '50 imágenes marcadas', '🖼️', 'special', '{"type": "pinned_images", "value": 50}', 106),
-('visual_eclectic', 'Ecléctico Visual', 'Usaste todas las categorías de imagen', '🎨', 'special', '{"type": "all_categories_used", "value": true}', 107),
-('night_owl', 'Nocturno', '50 entradas entre 10 PM y 6 AM', '🦉', 'special', '{"type": "time_range_entries", "start": 22, "end": 6, "value": 50}', 108),
-('early_bird', 'Madrugador', '50 entradas entre 5 AM y 9 AM', '🌅', 'special', '{"type": "time_range_entries", "start": 5, "end": 9, "value": 50}', 109),
-('renaissance', 'Renacentista', 'Todas las categorías + todos los moods + 100 palabras', '🎭', 'special', '{"type": "composite", "requirements": [{"type": "all_categories_used"}, {"type": "all_moods_used"}, {"type": "word_challenges", "value": 100}]}', 110),
-('speedster', 'Velocista', '10 retos del timer en -3 minutos', '⚡', 'special', '{"type": "timer_speed", "seconds": 180, "value": 10}', 111),
-('slow_thinker', 'Pensador Lento', '10 retos del timer en +15 minutos', '🐢', 'special', '{"type": "timer_speed", "seconds": 900, "value": 10}', 112);
+('minimalist', 'Minimalista', '10 entradas con menos de 50 palabras', '✂️', 'special', '{"type": "short_entries", "max_length": 50, "value": 10}', 104),
+('essayist', 'Ensayista', '5 entradas con +1500 palabras', '📄', 'special', '{"type": "long_entries", "length": 1500, "value": 5}', 105),
+('epic_novelist', 'Novelista Épico', '3 entradas con +3000 palabras', '📚', 'special', '{"type": "long_entries", "length": 3000, "value": 3}', 106),
+('war_and_peace', 'Guerra y Paz', '1 entrada con +5000 palabras', '📖', 'special', '{"type": "single_long_entry", "value": 5000}', 107),
+('no_title_warrior', 'Emisario sin Placa', '100 entradas sin título', '🚫', 'special', '{"type": "no_title_entries", "value": 100}', 108),
+('perfect_consistency', 'Consistencia Impecable', '30 días consecutivos con 1 entrada cada día', '🎯', 'special', '{"type": "perfect_streak", "value": 30}', 109),
+('extreme_productivity', 'Productividad Extrema', '100 entradas en 30 días', '🚀', 'special', '{"type": "entries_in_period", "entries": 100, "days": 30}', 110),
+('image_collector', 'Coleccionista de Imágenes', '50 imágenes marcadas', '🖼️', 'special', '{"type": "pinned_images", "value": 50}', 111),
+('image_hoarder', 'Acumulador', '100 imágenes en el banco personal', '🖼️', 'special', '{"type": "user_images", "value": 100}', 112),
+('visual_eclectic', 'Ecléctico Visual', 'Usaste todas las categorías de imagen', '🎨', 'special', '{"type": "all_categories_used", "value": true}', 113),
+('influencer', 'Influencer', '50 entradas públicas', '📢', 'visibility', '{"type": "public_entries", "value": 50}', 114),
+('night_owl', 'Nocturno', '50 entradas entre 10 PM y 6 AM', '🦉', 'special', '{"type": "time_range_entries", "start": 22, "end": 6, "value": 50}', 115),
+('early_bird', 'Madrugador', '50 entradas entre 5 AM y 9 AM', '🌅', 'special', '{"type": "time_range_entries", "start": 5, "end": 9, "value": 50}', 116),
+('lunch_hour', 'Hora del Almuerzo', '30 entradas entre 12 PM y 2 PM', '🍽️', 'special', '{"type": "time_range_entries", "start": 12, "end": 14, "value": 30}', 117),
+('golden_hour', 'Golden Hour', '25 entradas entre 6 PM y 8 PM', '🌅', 'special', '{"type": "time_range_entries", "start": 18, "end": 20, "value": 25}', 118),
+('renaissance', 'Renacentista', 'Todas las categorías + todos los moods + 100 palabras', '🎭', 'special', '{"type": "composite", "requirements": [{"type": "all_categories_used"}, {"type": "all_moods_used"}, {"type": "word_challenges", "value": 100}]}', 119),
+('speedster', 'Velocista', '10 retos del timer en -3 minutos', '⚡', 'special', '{"type": "timer_speed", "seconds": 180, "value": 10}', 120),
+('slow_thinker', 'Pensador Reflexivo', '10 retos del timer completados', '🐢', 'special', '{"type": "timer_completed", "value": 10}', 121),
+
+-- BADGES DE VOLUMEN DE PALABRAS
+('wordsmith_10k', 'Verborrea', '10,000 palabras escritas en total', '📝', 'volume', '{"type": "total_words", "value": 10000}', 150),
+('wordsmith_100k', 'Orador Incansable', '100,000 palabras escritas en total', '🗣️', 'volume', '{"type": "total_words", "value": 100000}', 151),
+('wordsmith_500k', 'Torrente de Palabras', '500,000 palabras escritas en total', '🌊', 'volume', '{"type": "total_words", "value": 500000}', 152),
+('wordsmith_1m', 'Millón de Palabras', '1,000,000 palabras escritas en total', '💎', 'volume', '{"type": "total_words", "value": 1000000}', 153),
+
+-- BADGE SUPREMO
+('glorified', 'Glorificado', 'Desbloqueaste TODOS los badges', '💯', 'ultimate', '{"type": "all_badges_unlocked", "value": true}', 999);
 
 -- Mensaje de éxito
 select 'Tablas de WallaPic con sistema completo de badges creadas exitosamente!' as resultado;

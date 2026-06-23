@@ -1135,7 +1135,7 @@ function getDailyPhraseChallenge() {
     // Si ya tenemos la frase del día en memoria, devolverla
     if (dailyPhrase) return dailyPhrase;
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = window.getLocalDateString();
     
     // Verificar si ya tenemos una frase guardada para hoy
     try {
@@ -1234,7 +1234,7 @@ async function markPhraseAsUsed(phrase, date) {
 // Verificar si la frase ya fue usada hoy
 function isPhraseUsedToday(phrase) {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = window.getLocalDateString();
         const stored = localStorage.getItem('wallapic_used_phrases');
         const usedPhrases = stored ? JSON.parse(stored) : [];
         

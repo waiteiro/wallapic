@@ -34,7 +34,10 @@ async function saveEntryToStorage(entry) {
                     image: entry.image,
                     word_count: entry.wordCount,
                     char_count: entry.charCount,
-                    is_public: entry.isPublic || false
+                    is_public: entry.isPublic || false,
+                    writing_seconds: entry.writingSeconds || null,
+                    completed_with_timer: entry.completedWithTimer || false,
+                    timer_seconds_used: entry.timerSecondsUsed || null
                 }])
                 .select()
                 .single();
@@ -77,6 +80,9 @@ async function updateEntryInStorage(entry) {
                     text: entry.text,
                     word_count: entry.wordCount,
                     char_count: entry.charCount,
+                    writing_seconds: entry.writingSeconds || null,
+                    completed_with_timer: entry.completedWithTimer || false,
+                    timer_seconds_used: entry.timerSecondsUsed || null,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', entry.supabaseId)
@@ -191,6 +197,9 @@ async function loadEntriesFromStorage() {
                 charCount: e.char_count,
                 isPublic: e.is_public,
                 isArchived: e.is_archived,
+                writingSeconds: e.writing_seconds || null,
+                completedWithTimer: e.completed_with_timer || false,
+                timerSecondsUsed: e.timer_seconds_used || null,
                 fromCloud: true
             }));
             
@@ -610,5 +619,73 @@ window.storageManager = {
     
     // Badges
     unlockBadge,
-    loadUnlockedBadges
+    loadUnlockedBadges,
+    
+    // Mejor racha
+    saveBestStreak,
+    loadBestStreak
 };
+
+
+// ============================================
+// MEJOR RACHA (BEST STREAK)
+// ============================================
+
+// Guardar mejor racha
+async function saveBestStreak(bestStreak) {
+    const user = getCurrentUser();
+    
+    if (user && window.supabaseClient) {
+        // Guardar en Supabase
+        try {
+            const { error } = await window.supabaseClient
+                .from('users')
+                .update({ best_streak: bestStreak })
+                .eq('id', user.id);
+            
+            if (error) throw error;
+            
+            console.log('✅ Mejor racha guardada en Supabase:', bestStreak);
+            return true;
+        } catch (error) {
+            console.error('❌ Error guardando mejor racha:', error);
+            return false;
+        }
+    }
+    
+    // Sin sesión: ya se guarda en localStorage desde streak-system.js
+    return true;
+}
+
+// Cargar mejor racha
+async function loadBestStreak() {
+    const user = getCurrentUser();
+    
+    if (user && window.supabaseClient) {
+        // Cargar desde Supabase
+        try {
+            const { data, error } = await window.supabaseClient
+                .from('users')
+                .select('best_streak')
+                .eq('id', user.id)
+                .single();
+            
+            if (error) throw error;
+            
+            const bestStreak = data.best_streak || 0;
+            
+            // Sincronizar con localStorage
+            localStorage.setItem('wallapic_best_streak', bestStreak.toString());
+            
+            console.log('✅ Mejor racha cargada desde Supabase:', bestStreak);
+            return bestStreak;
+        } catch (error) {
+            console.error('❌ Error cargando mejor racha:', error);
+            return 0;
+        }
+    }
+    
+    // Sin sesión: cargar desde localStorage
+    const stored = localStorage.getItem('wallapic_best_streak');
+    return stored ? parseInt(stored) : 0;
+}

@@ -1,312 +1,447 @@
 /* ========================================
-   CÍRCULOS SOCIALES - ESTILOS MODULARES
-   Sistema de círculos privados para WallaPic
+   CÍRCULOS SOCIALES - 100% MODULAR E INDEPENDIENTE
+   Sin conflictos con ningún otro estilo de la app
+   Prefijo único: circles-
    ======================================== */
 
-/* Modal principal */
-#circlesModal {
+/* Variables exclusivas de círculos */
+:root {
+    --circles-primary: #6366f1;
+    --circles-primary-hover: #4f46e5;
+    --circles-secondary: #8b5cf6;
+    --circles-danger: #ef4444;
+    --circles-success: #10b981;
+    --circles-warning: #f59e0b;
+    --circles-bg-light: rgba(255, 255, 255, 0.03);
+    --circles-bg-medium: rgba(255, 255, 255, 0.05);
+    --circles-bg-strong: rgba(255, 255, 255, 0.08);
+    --circles-border: rgba(255, 255, 255, 0.1);
+    --circles-text-primary: #f5f5f5;
+    --circles-text-secondary: #a0a0a0;
+}
+
+/* Tema claro */
+[data-theme="light"] {
+    --circles-bg-light: rgba(0, 0, 0, 0.03);
+    --circles-bg-medium: rgba(0, 0, 0, 0.05);
+    --circles-bg-strong: rgba(0, 0, 0, 0.08);
+    --circles-border: rgba(0, 0, 0, 0.1);
+    --circles-text-primary: #1a1a1a;
+    --circles-text-secondary: #666666;
+}
+
+/* ========================================
+   BADGE DE NOTIFICACIÓN (único en sidebar)
+   ======================================== */
+
+/* Asegurar que el botón de círculos tenga position relative */
+#circlesBtn {
+    position: relative;
+}
+
+.circles-notification-badge {
+    position: absolute;
+    top: -6px;
+    left: -8px;
+    min-width: 20px;
+    height: 20px;
+    background: var(--circles-danger);
+    color: white;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+    border: 2px solid rgba(18, 18, 23, 1);
+    pointer-events: none;
+    z-index: 10;
+    animation: circles-pulse-notification 2s ease-in-out infinite;
+}
+
+@keyframes circles-pulse-notification {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+    }
+    50% {
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.6);
+    }
+}
+
+/* ========================================
+   MODAL PRINCIPAL DE CÍRCULOS
+   ======================================== */
+
+.circles-modal {
     display: none;
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(12px);
     z-index: 1000;
     align-items: center;
     justify-content: center;
 }
 
-#circlesModal.show {
+.circles-modal.circles-show {
     display: flex;
 }
 
-.circles-modal-content {
-    max-width: 900px;
-    width: 90vw;
-    max-height: 85vh;
-    background: var(--bg-secondary);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+.circles-modal-container {
+    max-width: 1000px;
+    width: 92vw;
+    max-height: 90vh;
+    background: var(--circles-bg-strong);
+    border: 1px solid var(--circles-border);
+    border-radius: 16px;
     overflow: hidden;
-    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
 }
 
-.circles-modal-content .modal-header {
-    padding: 0.75rem 1.25rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.circles-modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--circles-border);
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+
+    gap: 1rem;
+    flex-shrink: 0;
 }
 
-.circles-modal-content .modal-header h2 {
-    font-size: 1rem;
-    font-weight: 500;
+.circles-modal-title {
+    font-size: 1.125rem;
+    font-weight: 600;
     margin: 0;
     flex: 1;
+    color: var(--circles-text-primary);
 }
 
-.circles-modal-body {
-    padding: 1.25rem;
-    overflow-y: auto;
-    max-height: calc(85vh - 60px);
-}
-
-/* Navegación */
-.back-btn {
+.circles-back-btn {
     background: none;
     border: none;
-    color: rgba(255,255,255,0.7);
+    color: var(--circles-text-secondary);
     cursor: pointer;
     padding: 0.5rem;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    border-radius: 8px;
+}
+
+.circles-back-btn.circles-visible {
+    display: flex;
+}
+
+.circles-back-btn:hover {
+    background: var(--circles-bg-light);
+    color: var(--circles-text-primary);
+}
+
+.circles-close-btn {
+    background: none;
+    border: none;
+    color: var(--circles-text-secondary);
+    font-size: 1.75rem;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
-    border-radius: 6px;
+    border-radius: 8px;
+    line-height: 1;
 }
 
-.back-btn:hover {
-    background: rgba(255,255,255,0.05);
-    color: rgba(255,255,255,0.9);
+.circles-close-btn:hover {
+    background: var(--circles-bg-light);
+
+    color: var(--circles-text-primary);
 }
 
-/* Estados vacíos y carga */
-.loading {
-    text-align: center;
-    padding: 3rem;
-    color: var(--text-secondary);
-}
-
-.empty-state {
-    text-align: center;
-    padding: 3rem 2rem;
-    color: var(--text-secondary);
-}
-
-.empty-state svg {
-    margin-bottom: 1rem;
-    opacity: 0.5;
-}
-
-.empty-state p {
-    margin: 0.5rem 0;
-}
-
-.empty-state-subtitle {
-    font-size: 0.85rem;
-    opacity: 0.7;
+.circles-modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
 }
 
 /* ========================================
-   INVITACIONES
+   ESTADOS COMUNES
    ======================================== */
 
-.invitations-section {
+.circles-loading {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--circles-text-secondary);
+}
+
+.circles-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--circles-border);
+    border-top-color: var(--circles-primary);
+    border-radius: 50%;
+    animation: circles-spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+@keyframes circles-spin {
+    to { transform: rotate(360deg); }
+}
+
+.circles-empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--circles-text-secondary);
+}
+
+.circles-empty svg {
     margin-bottom: 1.5rem;
+    opacity: 0.4;
 }
 
-.section-title {
-    font-size: 0.95rem;
+.circles-empty-title {
+    margin: 0.75rem 0;
+    font-size: 1rem;
+    color: var(--circles-text-primary);
     font-weight: 600;
-    margin-bottom: 0.75rem;
-    color: var(--text-primary);
 }
 
-.invitations-list {
+.circles-empty-subtitle {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+}
+
+
+/* ========================================
+   BOTONES MODULARES
+   ======================================== */
+
+.circles-btn {
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.circles-btn-primary {
+    background: var(--circles-primary);
+    color: white;
+}
+
+.circles-btn-primary:hover {
+    background: var(--circles-primary-hover);
+    transform: translateY(-1px);
+}
+
+.circles-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.circles-btn-secondary {
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
+    color: var(--circles-text-primary);
+}
+
+.circles-btn-secondary:hover {
+    background: var(--circles-bg-medium);
+}
+
+.circles-btn-danger {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--circles-danger);
+}
+
+.circles-btn-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.circles-btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+
+
+/* ========================================
+   SECCIONES Y HEADERS
+   ======================================== */
+
+.circles-section {
+    margin-bottom: 2rem;
+}
+
+.circles-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.circles-section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--circles-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ========================================
+   LISTA DE INVITACIONES
+   ======================================== */
+
+.circles-invitations {
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
 }
 
-.invitation-card {
+.circles-invitation-card {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
-    padding: 0.85rem;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
+    border-radius: 12px;
     transition: all 0.2s;
 }
 
-.invitation-card:hover {
-    background: rgba(255,255,255,0.04);
-    border-color: rgba(255,255,255,0.1);
+.circles-invitation-card:hover {
+    background: var(--circles-bg-medium);
+    border-color: var(--circles-bg-strong);
 }
 
-.invitation-circle {
-    width: 48px;
-    height: 48px;
+.circles-invitation-avatar {
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-}
-
-.invitation-circle-initial {
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     font-weight: 600;
+
     color: white;
 }
 
-.invitation-info {
+.circles-invitation-info {
     flex: 1;
     min-width: 0;
 }
 
-.invitation-info h4 {
-    font-size: 0.9rem;
+.circles-invitation-name {
+    font-size: 1rem;
     font-weight: 600;
-    margin-bottom: 0.2rem;
-    color: var(--text-primary);
+    margin: 0 0 0.25rem 0;
+    color: var(--circles-text-primary);
 }
 
-.invitation-from {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
+.circles-invitation-from {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+    margin: 0;
 }
 
-.invitation-desc {
-    font-size: 0.75rem;
-    color: rgba(255,255,255,0.5);
-    margin-top: 0.2rem;
+.circles-invitation-desc {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+    margin: 0.25rem 0 0 0;
     line-height: 1.4;
 }
 
-.invitation-actions {
+.circles-invitation-actions {
     display: flex;
     gap: 0.5rem;
     flex-shrink: 0;
 }
 
-.btn-accept {
-    padding: 0.45rem 0.9rem;
-    background: var(--accent);
-    border: none;
-    border-radius: 6px;
-    color: #000;
-    font-weight: 500;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-accept:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-}
-
-.btn-reject {
-    padding: 0.45rem 0.9rem;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
-    color: rgba(255,255,255,0.7);
-    font-weight: 500;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-reject:hover {
-    background: rgba(255,255,255,0.06);
-    border-color: rgba(255,255,255,0.12);
-}
-
 /* ========================================
-   LISTA DE CÍRCULOS
+   GRID DE CÍRCULOS
    ======================================== */
-
-.circles-section {
-    margin-top: 1.5rem;
-}
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.btn-create-circle {
-    padding: 0.5rem 1rem;
-    font-size: 0.8rem;
-    background: var(--accent);
-    color: #000;
-    border: none;
-    border-radius: 6px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-create-circle:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-}
 
 .circles-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
 }
 
-.circle-card {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
+.circles-card {
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
+    border-radius: 12px;
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
 }
 
-.circle-card:hover {
-    background: rgba(255,255,255,0.04);
-    border-color: rgba(255,255,255,0.12);
-    transform: translateY(-3px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+.circles-card:hover {
+    background: var(--circles-bg-medium);
+    border-color: var(--circles-bg-strong);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.3);
 }
 
-.circle-card-header {
-    padding: 1.25rem;
+
+.circles-card-header {
+    padding: 1.5rem;
     color: white;
     position: relative;
-    background: linear-gradient(135deg, var(--color) 0%, var(--color-dark, var(--color)) 100%);
+    min-height: 100px;
+    display: flex;
+    align-items: center;
 }
 
-.circle-card-header h3 {
-    font-size: 1rem;
+.circles-card-name {
+    font-size: 1.125rem;
     font-weight: 600;
     margin: 0;
     letter-spacing: -0.01em;
 }
 
-.admin-badge {
+.circles-admin-badge {
     position: absolute;
-    top: 0.6rem;
-    right: 0.6rem;
+    top: 0.75rem;
+    right: 0.75rem;
     background: rgba(0,0,0,0.25);
     backdrop-filter: blur(10px);
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.65rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.circle-card-body {
-    padding: 1rem 1.25rem 1.25rem;
+.circles-card-body {
+    padding: 1.25rem;
 }
 
-.circle-description {
-    font-size: 0.8rem;
-    color: rgba(255,255,255,0.6);
-    margin: 0;
+.circles-card-description {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+    margin: 0 0 1rem 0;
     line-height: 1.5;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -315,69 +450,133 @@
     overflow: hidden;
 }
 
+.circles-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--circles-border);
+}
+
+.circles-members-count {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+}
+
+
 /* ========================================
-   CREAR CÍRCULO
+   FORMULARIOS
    ======================================== */
 
-.create-circle-form {
+.circles-form {
     max-width: 500px;
     margin: 0 auto;
-    padding: 1rem 0;
 }
 
-.form-group {
-    margin-bottom: 1.5rem;
+.circles-form-group {
+    margin-bottom: 1.25rem;
 }
 
-.form-group label {
+.circles-form-label {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: var(--circles-text-secondary);
     margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
-.form-input,
-.form-textarea {
+.circles-form-hint {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--circles-text-secondary);
+    margin-top: 0.25rem;
+    font-style: italic;
+}
+
+.circles-form-input,
+.circles-form-textarea {
+    /* Reset inherited styles */
+    all: initial;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    
+    /* Apply circles styles */
     width: 100%;
     padding: 0.75rem;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
     border-radius: 8px;
-    color: var(--text-primary);
+    color: var(--circles-text-primary);
     font-size: 0.9rem;
-    font-family: var(--font-main);
     transition: all 0.2s;
+    display: block;
 }
 
-.form-input:focus,
-.form-textarea:focus {
+/* SELECT específico - forzar tema oscuro SIEMPRE */
+select.circles-form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #f5f5f5 !important;
+}
+
+select.circles-form-input:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-color: var(--circles-primary);
+}
+
+select.circles-form-input:focus {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-color: var(--circles-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Opciones del select - forzar tema oscuro */
+select.circles-form-input option {
+    background-color: #1a1a1f !important;
+    color: #f5f5f5 !important;
+    padding: 0.75rem !important;
+}
+
+.circles-form-input:focus,
+.circles-form-textarea:focus {
     outline: none;
-    border-color: var(--accent);
-    background: rgba(255,255,255,0.08);
+    border-color: var(--circles-primary);
+    background: var(--circles-bg-medium);
 }
 
-.form-textarea {
+.circles-form-textarea {
     resize: vertical;
-    min-height: 80px;
+    min-height: 100px;
+    line-height: 1.5;
 }
 
-.form-input::placeholder,
-.form-textarea::placeholder {
-    color: rgba(255,255,255,0.3);
-}
-
-.color-picker {
+.circles-form-actions {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+
+/* ========================================
+   COLOR PICKER
+   ======================================== */
+
+.circles-color-picker {
+    display: flex;
+    gap: 0.75rem;
     flex-wrap: wrap;
 }
 
-.color-option {
-    width: 44px;
-    height: 44px;
+.circles-color-option {
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     border: 3px solid transparent;
     cursor: pointer;
@@ -385,613 +584,755 @@
     position: relative;
 }
 
-.color-option:hover {
+.circles-color-option:hover {
     transform: scale(1.1);
 }
 
-.color-option.selected {
-    border-color: rgba(255,255,255,0.8);
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+.circles-color-option.circles-selected {
+    border-color: var(--circles-text-primary);
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.3);
 }
 
-.color-option.selected::after {
+.circles-color-option.circles-selected::after {
     content: '✓';
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     color: white;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: bold;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
-.btn-submit-circle {
-    width: 100%;
-    padding: 0.75rem;
-    margin-top: 1.5rem;
+/* ========================================
+   IMAGE BANK SELECTION
+   ======================================== */
+
+.circles-bank-image {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 8px;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.circles-bank-image:hover {
+    border-color: var(--circles-border);
+    transform: scale(1.02);
+}
+
+.circles-bank-image.circles-selected {
+    border-color: var(--circles-primary);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.circles-bank-image.circles-selected::after {
+    content: '✓';
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 28px;
+    height: 28px;
+    background: var(--circles-primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 /* ========================================
    DETALLE DEL CÍRCULO
    ======================================== */
 
-.circle-detail {
-    max-width: 680px;
-    margin: 0 auto;
-}
-
-.circle-header {
-    padding: 1.5rem;
-    border-radius: 10px;
-    margin-bottom: 1.5rem;
-    color: white;
-    background: linear-gradient(135deg, var(--color) 0%, var(--color-dark, var(--color)) 100%);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.circle-header h2 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0 0 0.4rem 0;
-    letter-spacing: -0.02em;
-}
-
-.circle-header p {
-    font-size: 0.85rem;
-    opacity: 0.9;
-    margin: 0;
-    line-height: 1.5;
-}
-
-/* Sección imagen de la semana */
-.weekly-challenge-section {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
-    padding: 1.25rem;
-    margin-bottom: 1.25rem;
-    transition: all 0.2s;
-}
-
-.weekly-challenge-section:hover {
-    background: rgba(255,255,255,0.03);
-    border-color: rgba(255,255,255,0.08);
-}
-
-.weekly-challenge-section h3 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.weekly-image-preview {
-    margin: 1rem 0;
-}
-
-.weekly-image-preview img {
-    width: 100%;
-    border-radius: 8px;
-    margin-bottom: 0.5rem;
-}
-
-.weekly-image-credit {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    text-align: center;
-}
-
-.submission-status {
-    padding: 0.75rem;
-    border-radius: 6px;
-    margin: 1rem 0;
-    text-align: center;
-    font-weight: 500;
-}
-
-.submission-status.completed {
-    background: rgba(6,255,165,0.1);
-    border: 1px solid rgba(6,255,165,0.2);
-    color: #06ffa5;
-}
-
-.weekly-image-empty {
-    text-align: center;
-    padding: 2rem;
-}
-
-.weekly-image-empty p {
-    margin: 0.5rem 0;
-}
-
-.weekly-image-hint {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-/* ========================================
-   MIEMBROS
-   ======================================== */
-
-.members-section {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
-    padding: 1.25rem;
-    margin-bottom: 1.25rem;
-    transition: all 0.2s;
-}
-
-.members-section:hover {
-    background: rgba(255,255,255,0.03);
-    border-color: rgba(255,255,255,0.08);
-}
-
-.members-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.65rem;
-}
-
-.member-card {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.6rem;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.04);
-    border-radius: 8px;
-    transition: all 0.2s;
-}
-
-.member-card:hover {
-    background: rgba(255,255,255,0.04);
-    border-color: rgba(255,255,255,0.08);
-}
-
-.member-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    color: white;
-    font-size: 0.9rem;
-    flex-shrink: 0;
-}
-
-.member-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-.member-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 0;
-}
-
-.member-name {
-    font-size: 0.8rem;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.role-badge {
-    font-size: 0.65rem;
-    color: var(--accent);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-/* ========================================
-   ACCIONES DEL CÍRCULO
-   ======================================== */
-
-.circle-actions {
-    display: flex;
-    justify-content: center;
-    margin-top: 2rem;
-}
-
-.btn-danger {
-    background: rgba(239,68,68,0.1);
-    border: 1px solid rgba(239,68,68,0.3);
-    color: #ef4444;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-danger:hover {
-    background: rgba(239,68,68,0.2);
-    border-color: rgba(239,68,68,0.4);
-}
-
-.btn-sm {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.8rem;
-}
-
-/* ========================================
-   FORMULARIO ENTRADA SEMANAL
-   ======================================== */
-
-.weekly-entry-form {
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.weekly-entry-image-fixed img {
-    width: 100%;
-    border-radius: 8px;
-    margin-bottom: 0.5rem;
-}
-
-.weekly-entry-image-selector {
-    text-align: center;
-    padding: 2rem;
-    background: rgba(255,255,255,0.03);
-    border: 1px dashed rgba(255,255,255,0.1);
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-}
-
-.selected-image-preview img {
-    width: 100%;
-    max-width: 400px;
-    border-radius: 8px;
-    margin: 1rem auto;
-    display: block;
-}
-
-.char-counter {
-    text-align: right;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    margin-top: 0.5rem;
-}
-
-.btn-submit-weekly {
-    width: 100%;
-    padding: 0.75rem;
-    margin-top: 1rem;
-}
-
-.weekly-note {
-    text-align: center;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    margin-top: 1rem;
-}
-
-/* ========================================
-   ENTRADAS DE LA SEMANA
-   ======================================== */
-
-.weekly-entries {
+.circles-detail {
     max-width: 700px;
     margin: 0 auto;
 }
 
-.entries-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-
-.entries-count {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-}
-
-.status-badge {
-    padding: 0.25rem 0.75rem;
+.circles-detail-header {
+    padding: 2rem;
     border-radius: 12px;
+    color: white;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.circles-detail-name {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+}
+
+.circles-detail-description {
+    font-size: 1rem;
+
+    margin: 0 0 0.75rem 0;
+    opacity: 0.95;
+}
+
+/* ========================================
+   CHALLENGE/EJERCICIO
+   ======================================== */
+
+.circles-challenge {
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.circles-challenge-image {
+    width: 100%;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.circles-challenge-image img {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.circles-challenge-credit {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 6px;
     font-size: 0.75rem;
+}
+
+.circles-challenge-proposer {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+}
+
+.circles-challenge-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: var(--circles-bg-medium);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+
+.circles-challenge-timer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+}
+
+.circles-challenge-timer.circles-urgent {
+    color: var(--circles-danger);
     font-weight: 600;
 }
 
-.status-badge.revealed {
-    background: rgba(255,215,0,0.1);
-    color: #ffd700;
+.circles-challenge-progress {
+    flex: 1;
 }
 
-.status-badge.pending {
-    background: rgba(255,255,255,0.05);
-    color: var(--text-secondary);
+.circles-progress-label {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+    margin-bottom: 0.25rem;
 }
 
-.weekly-entry-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
+.circles-progress-bar {
+    height: 8px;
+    background: var(--circles-bg-strong);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.circles-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--circles-primary) 0%, var(--circles-secondary) 100%);
+    transition: width 0.3s ease;
+}
+
+.circles-challenge-revealed {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: inline-block;
+}
+
+.circles-submitted-message {
+    text-align: center;
+    padding: 1rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--circles-success);
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.circles-no-challenge {
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.circles-no-challenge-icon {
+    margin-bottom: 1.5rem;
+    opacity: 0.4;
+}
+
+
+/* ========================================
+   ENTRIES/ENTRADAS
+   ======================================== */
+
+.circles-entries {
+    margin-top: 1.5rem;
+}
+
+.circles-entries-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 1.25rem 0;
+    color: var(--circles-text-primary);
+}
+
+.circles-entry {
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
     border-radius: 12px;
-    padding: 1.5rem;
+    padding: 1.25rem;
     margin-bottom: 1rem;
 }
 
-.weekly-entry-card.locked {
-    opacity: 0.6;
+.circles-entry.circles-own {
+    border-color: var(--circles-primary);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
 }
 
-.entry-author {
+.circles-entry-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.circles-entry-author {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-bottom: 1rem;
 }
 
-.author-avatar {
-    width: 36px;
-    height: 36px;
+.circles-author-avatar {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
+    background: var(--circles-primary);
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 600;
-    color: white;
-    font-size: 0.9rem;
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
-.author-name {
+.circles-author-name {
     font-weight: 500;
+    color: var(--circles-text-primary);
     font-size: 0.9rem;
 }
 
-.owner-badge {
-    font-size: 0.7rem;
-    background: var(--accent);
-    color: #000;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
+.circles-own-badge {
+    background: var(--circles-primary);
+    color: white;
+    padding: 0.125rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
+    margin-left: 0.5rem;
 }
 
-.entry-locked {
-    text-align: center;
-    padding: 2rem;
-    color: var(--text-secondary);
-}
 
-.entry-locked svg {
-    margin-bottom: 1rem;
-    opacity: 0.5;
-}
-
-.lock-hint {
-    font-size: 0.8rem;
-    opacity: 0.7;
-}
-
-.entry-title {
-    font-size: 1.1rem;
+.circles-entry-title {
+    font-size: 1.125rem;
     font-weight: 600;
-    margin-bottom: 0.75rem;
-    color: var(--text-primary);
+    margin: 0 0 0.75rem 0;
+    color: var(--circles-text-primary);
 }
 
-.entry-text {
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: rgba(255,255,255,0.85);
-    margin-bottom: 1rem;
+.circles-entry-text {
+    color: var(--circles-text-primary);
+    line-height: 1.7;
     white-space: pre-wrap;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
 }
 
-.entry-actions {
-    display: flex;
-    gap: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255,255,255,0.05);
-}
-
-.entry-action-btn {
+.circles-entry-footer {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    background: none;
-    border: none;
-    color: rgba(255,255,255,0.5);
+    justify-content: space-between;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--circles-border);
+}
+
+.circles-entry-meta {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+}
+
+.circles-like-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    border: 1px solid var(--circles-border);
+    padding: 0.5rem 0.75rem;
+    border-radius: 20px;
     cursor: pointer;
-    font-size: 0.85rem;
-    padding: 0.4rem 0.75rem;
-    border-radius: 6px;
     transition: all 0.2s;
+    color: var(--circles-text-secondary);
+    font-size: 0.875rem;
 }
 
-.entry-action-btn:hover {
-    background: rgba(255,255,255,0.05);
-    color: rgba(255,255,255,0.8);
+.circles-like-btn:hover {
+    background: var(--circles-bg-light);
+    border-color: var(--circles-danger);
 }
 
-.entry-action-btn.liked {
-    color: #ff6b9d;
+.circles-like-btn.circles-liked {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--circles-danger);
+    color: var(--circles-danger);
+}
+
+/* ========================================
+   LOCKED ENTRIES
+   ======================================== */
+
+.circles-locked-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+
+.circles-locked-card {
+    background: var(--circles-bg-light);
+    border: 2px dashed var(--circles-border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: center;
+}
+
+.circles-locked-card.circles-own {
+    border-color: var(--circles-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.circles-locked-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #9ca3af;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+.circles-locked-username {
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+}
+
+.circles-locked-hint {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--circles-text-secondary);
+    font-style: italic;
+    margin-top: 1rem;
 }
 
 /* ========================================
    COMENTARIOS
    ======================================== */
 
-.comments-preview {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255,255,255,0.05);
+.circles-comments {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid var(--circles-border);
 }
 
-.comment {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin-bottom: 0.75rem;
-}
-
-.comment-author {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: rgba(255,255,255,0.7);
-}
-
-.comment-text {
-    font-size: 0.85rem;
-    color: rgba(255,255,255,0.6);
-}
-
-.view-more-comments {
-    font-size: 0.8rem;
-    color: var(--accent);
-    cursor: pointer;
-    margin-top: 0.5rem;
-}
-
-.view-more-comments:hover {
-    text-decoration: underline;
-}
-
-/* Modal de comentarios */
-.comments-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-}
-
-.comments-modal-content {
-    background: var(--bg-secondary);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
-    width: 90%;
-    max-width: 500px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.comments-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-
-.comments-header h3 {
+.circles-comments-title {
     font-size: 1rem;
     font-weight: 600;
+    margin: 0 0 1rem 0;
+    color: var(--circles-text-primary);
 }
 
-.comments-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem 1.5rem;
-}
-
-.comment-full {
+.circles-comments-list {
     display: flex;
+    flex-direction: column;
     gap: 0.75rem;
     margin-bottom: 1rem;
-    position: relative;
 }
 
-.comment-avatar {
-    width: 32px;
-    height: 32px;
+
+.circles-comment {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--circles-bg-light);
+    border-radius: 8px;
+}
+
+.circles-comment.circles-own {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.circles-comment-avatar {
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
+    background: var(--circles-primary);
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 600;
-    color: white;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     flex-shrink: 0;
 }
 
-.comment-content {
+.circles-comment-content {
     flex: 1;
 }
 
-.comment-date {
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-    margin-top: 0.25rem;
+.circles-comment-author {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--circles-text-primary);
+    margin-bottom: 0.25rem;
+    display: block;
 }
 
-.btn-delete-comment {
-    background: none;
+.circles-comment-text {
+    margin: 0;
+    color: var(--circles-text-primary);
+    line-height: 1.5;
+    font-size: 0.875rem;
+}
+
+.circles-comment-delete {
+    background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 1rem;
     opacity: 0.5;
     transition: opacity 0.2s;
+    font-size: 1rem;
+    padding: 0;
 }
 
-.btn-delete-comment:hover {
+.circles-comment-delete:hover {
     opacity: 1;
 }
 
-.add-comment-form {
+.circles-comment-form {
     display: flex;
     gap: 0.5rem;
-    padding: 1rem 1.5rem;
-    border-top: 1px solid rgba(255,255,255,0.1);
 }
 
-.add-comment-form .form-input {
+.circles-comment-input {
+    /* Reset inherited styles */
+    all: initial;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    
+    /* Apply circles styles */
     flex: 1;
+    padding: 0.75rem;
+    border: 1px solid var(--circles-border);
+    border-radius: 8px;
+    background: var(--circles-bg-light);
+    color: var(--circles-text-primary);
+    font-size: 0.875rem;
+    display: block;
 }
 
-.add-comment-form .btn-primary {
-    padding: 0.75rem 1.25rem;
+
+.circles-comment-submit {
+    background: var(--circles-primary);
+    color: white;
+    border: none;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.circles-comment-submit:hover {
+    background: var(--circles-primary-hover);
+}
+
+/* ========================================
+   MIEMBROS
+   ======================================== */
+
+.circles-members {
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.circles-members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.circles-member {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--circles-bg-medium);
+    border-radius: 8px;
+}
+
+.circles-member-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--circles-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.circles-member-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.circles-member-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--circles-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+.circles-member-role {
+    font-size: 0.75rem;
+    color: var(--circles-primary);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.circles-member-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.25rem;
+}
+
+.circles-btn-icon {
+    background: transparent;
+    border: 1px solid var(--circles-border);
+    padding: 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--circles-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.circles-btn-icon:hover {
+    background: var(--circles-bg-light);
+    border-color: var(--circles-primary);
+    color: var(--circles-primary);
+}
+
+.circles-admin-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--circles-border);
+}
+
+/* ========================================
+   TOAST DE CÍRCULOS
+   ======================================== */
+
+.circles-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--circles-bg-strong);
+    backdrop-filter: blur(20px);
+    color: var(--circles-text-primary);
+    padding: 0.875rem 1.5rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    z-index: 10000;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--circles-border);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    max-width: 90%;
+    white-space: nowrap;
+}
+
+.circles-toast.circles-show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.circles-toast.circles-success {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--circles-success);
+}
+
+.circles-toast.circles-error {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--circles-danger);
 }
 
 /* ========================================
    MODAL DE INVITACIÓN
    ======================================== */
 
-.invite-modal {
+.circles-invite-modal {
     position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    z-index: 1100;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2000;
 }
 
-.invite-modal-content {
-    background: var(--bg-secondary);
-    border: 1px solid rgba(255,255,255,0.1);
+
+.circles-invite-container {
+    background: var(--circles-bg-strong);
+    border: 1px solid var(--circles-border);
     border-radius: 12px;
     width: 90%;
     max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 
-.invite-modal-content .modal-body {
-    padding: 1.5rem;
+.circles-invite-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--circles-border);
     display: flex;
-    flex-direction: column;
-    gap: 1rem;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.invite-modal-content .btn-primary {
-    width: 100%;
+.circles-invite-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--circles-text-primary);
+}
+
+.circles-invite-body {
+    padding: 1.5rem;
+}
+
+/* ========================================
+   OPCIONES DEL CÍRCULO
+   ======================================== */
+
+.circles-options {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 768px) {
+    .circles-modal-container {
+        width: 96vw;
+        max-height: 94vh;
+    }
+    
+    .circles-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .circles-members-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .circles-locked-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+}
+
+/* ========================================
+   UTILITIES
+   ======================================== */
+
+.circles-hidden {
+    display: none !important;
+}
+
+.circles-visible {
+    display: block !important;
+}
+
+.circles-flex {
+    display: flex !important;
 }

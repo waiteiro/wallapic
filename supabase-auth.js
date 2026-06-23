@@ -90,6 +90,11 @@ async function initAuth() {
         if (typeof initImageBank === 'function') {
             initImageBank(currentUser);
         }
+        
+        // Inicializar notificaciones de círculos
+        if (typeof circlesUI !== 'undefined' && circlesUI.updateNotificationBadge) {
+            circlesUI.updateNotificationBadge();
+        }
     }
     
     // Event listeners para auth modal
@@ -244,6 +249,12 @@ async function handleRegister() {
             window.currentUser = currentUser; // Exportar globalmente
             localStorage.setItem('wallapic_user', JSON.stringify(currentUser));
             updateUIForLoggedUser();
+            
+            // Inicializar notificaciones de círculos
+            if (typeof circlesUI !== 'undefined' && circlesUI.updateNotificationBadge) {
+                circlesUI.updateNotificationBadge();
+            }
+            
             showAuthSuccess(`¡Bienvenido, ${username}!`);
             setTimeout(() => {
                 closeAuthModal();
@@ -296,6 +307,12 @@ async function handleLogin() {
         window.currentUser = currentUser; // Exportar globalmente
         localStorage.setItem('wallapic_user', JSON.stringify(currentUser));
         updateUIForLoggedUser();
+        
+        // Inicializar notificaciones de círculos
+        if (typeof circlesUI !== 'undefined' && circlesUI.updateNotificationBadge) {
+            circlesUI.updateNotificationBadge();
+        }
+        
         showAuthSuccess(`Bienvenido, ${username}`);
         setTimeout(() => {
             closeAuthModal();
@@ -313,6 +330,12 @@ function logout() {
     currentUser = null;
     window.currentUser = null; // Limpiar global
     localStorage.removeItem('wallapic_user');
+    
+    // Limpiar notificaciones de círculos
+    const badge = document.getElementById('circlesNotificationBadge');
+    if (badge) {
+        badge.style.display = 'none';
+    }
     
     // Limpiar banco de imágenes
     if (window.imageBankInstance) {
@@ -342,11 +365,9 @@ function updateUIForLoggedUser() {
     if (currentUser) {
         window.currentUser = currentUser; // Asegurar que esté exportado
         profileBtn.classList.remove('active'); // NO rellenar de color
-        profileBtn.title = `${currentUser.username}`;
     } else {
         window.currentUser = null;
         profileBtn.classList.remove('active');
-        profileBtn.title = 'Iniciar sesión';
     }
     
     // Actualizar visibilidad de tabs en el archivo
@@ -427,9 +448,9 @@ async function renderPublicFeed() {
         window.moodScrollHandler = null;
     }
     
-    // Mostrar estado inicial en vista principal (no en vista de mood)
+    // Mostrar skeleton mientras carga
     if (!feedList.classList.contains('feed-mood-view')) {
-        feedList.innerHTML = '<p style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.5);">Cargando feed...</p>';
+        feedList.innerHTML = SkeletonUtils.feedSkeleton();
     }
     
     // Cargar solo las necesarias para las secciones iniciales (optimización)
@@ -628,7 +649,8 @@ async function showMoodEntries(mood) {
     const feedList = document.getElementById('historyList');
     if (!feedList) return;
     
-    feedList.innerHTML = '<p style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.5);">Cargando...</p>';
+    // Mostrar skeleton mientras carga
+    feedList.innerHTML = SkeletonUtils.archiveSkeleton(6);
     
     const entries = await loadPublicFeed();
     const filtered = entries.filter(e => e.mood === mood);
@@ -758,6 +780,18 @@ function setupMoodInfiniteScroll() {
 async function viewPublicEntry(entryId) {
     if (!window.supabaseClient) return;
     
+    // Mapa de traducción de moods (con tildes)
+    const moodLabels = {
+        'reflexivo': 'Reflexivo',
+        'poderoso': 'Poderoso',
+        'nostalgico': 'Nostálgico',
+        'cansado': 'Cansado',
+        'inspirado': 'Inspirado',
+        'alegre': 'Alegre',
+        'inquieto': 'Inquieto',
+        'melancolico': 'Melancólico'
+    };
+    
     try {
         const { data, error} = await window.supabaseClient
             .from('entries')
@@ -804,7 +838,7 @@ async function viewPublicEntry(entryId) {
                             <div class="entry-date">${formatDate(entry.date)}</div>
                             <div class="entry-mood-display">
                                 ${getMoodIcon(entry.mood)}
-                                <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${entry.mood}</span>
+                                <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${moodLabels[entry.mood] || entry.mood}</span>
                             </div>
                         </div>
                         <div style="color: var(--accent); font-size: 0.9rem; margin-bottom: 1rem;">
@@ -817,7 +851,7 @@ async function viewPublicEntry(entryId) {
                             <span>${entry.word_count} palabras</span>
                             <span>${entry.char_count} caracteres</span>
                         </div>
-                        ${entry.image && entry.image.photographer !== 'Demo' ? `
+                        ${entry.image && entry.image.photographer !== 'Demo' && entry.image.source !== 'user_bank' ? `
                             <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
                                 Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>
                             </div>
@@ -1128,6 +1162,9 @@ async function renderProfile() {
     const content = document.getElementById('profileContent');
     if (!content || !currentUser) return;
     
+    // Mostrar skeleton mientras carga
+    content.innerHTML = SkeletonUtils.profileSkeleton();
+    
     // Calcular estadísticas
     const stats = await getUserStats();
     
@@ -1158,7 +1195,15 @@ async function renderProfile() {
                 </label>
             </div>
             <div class="profile-new-info">
-                <h3 class="profile-new-username">@${currentUser.username}</h3>
+                <div class="profile-new-username-wrapper">
+                    <h3 class="profile-new-username" id="profileUsernameDisplay">@${currentUser.username}</h3>
+                    <button class="profile-username-edit-btn" onclick="editUsername()" data-tooltip="Editar nombre de usuario">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
                 ${currentBadge ? `<span class="profile-new-badge">${currentBadge}</span>` : ''}
             </div>
         </div>
@@ -1215,7 +1260,7 @@ async function renderProfile() {
                         <div class="profile-new-stat-inline">
                             <div class="profile-new-stat-block">
                                 <span class="profile-new-stat-inline-value" style="font-size: 1.8rem;">${stats.topMood.icon}</span>
-                                <span class="profile-new-stat-inline-label">Mood favorito</span>
+                                <span class="profile-new-stat-inline-label">Mood frecuente</span>
                                 <span class="profile-new-stat-inline-sub">${stats.topMood.name} · ${abbreviateNumber(stats.topMood.count)} veces</span>
                             </div>
                         </div>
@@ -1224,7 +1269,10 @@ async function renderProfile() {
                 
                 <!-- Bio compacta -->
                 <div class="profile-new-bio-wrapper">
-                    <textarea class="profile-new-bio-input" id="profileBio" placeholder="Bio...">${currentUser.bio || ''}</textarea>
+                    <textarea class="profile-new-bio-input" id="profileBio" placeholder="Bio..." maxlength="300">${currentUser.bio || ''}</textarea>
+                    <div class="profile-bio-counter">
+                        <span id="bioCharCount">0</span>/300
+                    </div>
                 </div>
                 
                 <!-- Botones compactos -->
@@ -1254,6 +1302,19 @@ async function renderProfile() {
     const avatarInput = document.getElementById('avatarUpload');
     if (avatarInput) {
         avatarInput.addEventListener('change', handleAvatarChange);
+    }
+    
+    // Contador de caracteres de la bio
+    const bioInput = document.getElementById('profileBio');
+    const bioCharCount = document.getElementById('bioCharCount');
+    if (bioInput && bioCharCount) {
+        // Actualizar contador inicial
+        bioCharCount.textContent = bioInput.value.length;
+        
+        // Actualizar al escribir
+        bioInput.addEventListener('input', () => {
+            bioCharCount.textContent = bioInput.value.length;
+        });
     }
 }
 
@@ -1289,6 +1350,9 @@ function setupProfileTabs() {
 async function loadProfileBadges() {
     const container = document.getElementById('profileBadgesContent');
     if (!container) return;
+    
+    // Mostrar skeleton
+    container.innerHTML = SkeletonUtils.badgesSkeleton(12);
     
     if (typeof window.badgeSystem === 'undefined') {
         container.innerHTML = '<p class="profile-new-empty">Sistema de badges no disponible</p>';
@@ -1872,6 +1936,160 @@ async function saveProfile() {
 window.openProfileModal = openProfileModal;
 window.closeProfileModal = closeProfileModal;
 window.saveProfile = saveProfile;
+
+// Editar nombre de usuario
+async function editUsername() {
+    if (!currentUser) return;
+    
+    const usernameDisplay = document.getElementById('profileUsernameDisplay');
+    const editBtn = document.querySelector('.profile-username-edit-btn');
+    
+    if (!usernameDisplay || !editBtn) return;
+    
+    // Ocultar el botón de editar
+    editBtn.style.display = 'none';
+    
+    // Crear input para editar
+    const currentUsername = currentUser.username;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'profile-username-input';
+    input.value = currentUsername;
+    input.maxLength = 20;
+    input.placeholder = 'nombre_usuario';
+    
+    // Reemplazar el texto con el input
+    usernameDisplay.style.display = 'none';
+    usernameDisplay.parentNode.insertBefore(input, usernameDisplay);
+    
+    // Crear botón de confirmar
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'profile-username-confirm-btn';
+    confirmBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+    `;
+    usernameDisplay.parentNode.insertBefore(confirmBtn, usernameDisplay);
+    
+    // Focus y seleccionar texto
+    input.focus();
+    input.select();
+    
+    // Función para guardar
+    const saveUsername = async () => {
+        let newUsername = input.value.trim();
+        
+        // Reemplazar espacios con guiones
+        newUsername = newUsername.replace(/\s+/g, '_');
+        
+        // Validar
+        if (newUsername === '' || newUsername === currentUsername) {
+            cancelEdit();
+            return;
+        }
+        
+        if (newUsername.length < 3) {
+            showToast('Mínimo 3 caracteres', 'error');
+            input.focus();
+            return;
+        }
+        
+        if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
+            showToast('Solo letras, números y guiones bajos', 'error');
+            input.focus();
+            return;
+        }
+        
+        // Deshabilitar input mientras se guarda
+        input.disabled = true;
+        confirmBtn.disabled = true;
+        
+        try {
+            // Verificar que el nombre no esté tomado
+            const { data: existingUser } = await window.supabaseClient
+                .from('users')
+                .select('id')
+                .eq('username', newUsername)
+                .neq('id', currentUser.id)
+                .maybeSingle();
+            
+            if (existingUser) {
+                showToast('Este nombre ya está en uso', 'error');
+                input.disabled = false;
+                confirmBtn.disabled = false;
+                input.focus();
+                return;
+            }
+            
+            // Actualizar en Supabase
+            const { error } = await window.supabaseClient
+                .from('users')
+                .update({ username: newUsername })
+                .eq('id', currentUser.id);
+            
+            if (error) throw error;
+            
+            // Actualizar currentUser
+            currentUser.username = newUsername;
+            window.currentUser = currentUser;
+            
+            // Guardar en localStorage
+            localStorage.setItem('wallapic_user', JSON.stringify(currentUser));
+            
+            // Actualizar display
+            usernameDisplay.textContent = `@${newUsername}`;
+            
+            // Limpiar y mostrar
+            input.remove();
+            confirmBtn.remove();
+            usernameDisplay.style.display = 'flex';
+            editBtn.style.display = 'flex';
+            
+            showToast('Nombre actualizado', 'success');
+            
+        } catch (error) {
+            console.error('Error actualizando nombre:', error);
+            showToast('Error: ' + error.message, 'error');
+            input.disabled = false;
+            confirmBtn.disabled = false;
+            input.focus();
+        }
+    };
+    
+    // Función para cancelar
+    const cancelEdit = () => {
+        input.remove();
+        confirmBtn.remove();
+        usernameDisplay.style.display = 'flex';
+        editBtn.style.display = 'flex';
+    };
+    
+    // Event listeners
+    confirmBtn.addEventListener('click', saveUsername);
+    
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveUsername();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+        }
+    });
+    
+    // Cancelar si pierde el foco (después de un breve delay)
+    input.addEventListener('blur', (e) => {
+        // Delay para permitir clic en el botón de confirmar
+        setTimeout(() => {
+            if (document.activeElement !== confirmBtn && document.contains(input)) {
+                cancelEdit();
+            }
+        }, 200);
+    });
+}
+
+window.editUsername = editUsername;
 
 
 // ============================================
