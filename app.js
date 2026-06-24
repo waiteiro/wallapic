@@ -1,9 +1,15 @@
 // Configuración de APIs
 const PEXELS_API_KEY = 'PZqacS9s22YzIhcq2gOnnnpW3b0GEHYMRCYn6uFHC88emGMpAl1QtRKN';
 const UNSPLASH_ACCESS_KEY = 'gGr37vwsEOoqo6jw4yFAcQnl4ikG5MRxRzhvffqMToE';
+const PIXABAY_API_KEY = '35815997-2fc59b57aae26c1087246893b';
 
-const IMAGE_SOURCES = ['unsplash', 'pexels'];
+// Distribución: 33% Comunidad, ~17% cada API externa (Unsplash, Pexels, Pixabay, Wikimedia)
+const IMAGE_SOURCES = ['unsplash', 'pexels', 'pixabay', 'wikimedia', 'shared', 'shared'];
 let currentSourceIndex = 0;
+
+// Caché de imágenes compartidas vistas HOY (se limpia diariamente)
+let sharedImagesSeenToday = [];
+let lastResetDate = new Date().toDateString();
 
 // ============================================
 // FUNCIÓN HELPER: Obtener fecha local en formato ISO
@@ -38,52 +44,36 @@ window.getLocalDateString = getLocalDateString;
 // Categorías de imágenes
 const IMAGE_CATEGORIES = [
     { id: 'random', name: 'Sorpréndeme', icon: '🎲', themes: null },
-    { id: 'nature', name: 'Naturaleza', icon: '🌿', themes: ['nature', 'mountains', 'forest', 'ocean', 'waterfall', 'landscape'] },
-    { id: 'urban', name: 'Urbano', icon: '🏙️', themes: ['city', 'architecture', 'street', 'urban', 'building'] },
-    { id: 'people', name: 'Retratos', icon: '👤', themes: ['portrait', 'people', 'face', 'person', 'human'] },
-    { id: 'abstract', name: 'Abstracto', icon: '🎨', themes: ['abstract', 'patterns', 'minimal', 'gradient', 'texture'] },
-    { id: 'cinematic', name: 'Cinematográfico', icon: '🎬', themes: ['cinematic', 'dramatic', 'moody', 'noir', 'neon'] },
-    { id: 'vintage', name: 'Vintage', icon: '📷', themes: ['vintage', 'retro', 'old', 'classic', 'nostalgia'] },
-    { id: 'minimal', name: 'Minimalista', icon: '◻️', themes: ['minimal', 'simple', 'clean', 'space', 'white'] },
-    { id: 'night', name: 'Nocturno', icon: '🌙', themes: ['night', 'stars', 'moon', 'dark', 'evening'] },
-    { id: 'seasons', name: 'Estaciones', icon: '🍂', themes: ['autumn', 'spring', 'winter', 'summer', 'seasonal'] },
-    { id: 'dark', name: 'Oscuro', icon: '🌑', themes: ['dark', 'shadow', 'black', 'mystery', 'darkness', 'gothic'] },
-    { id: 'inspiration', name: 'Inspiración', icon: '💪', themes: ['woman beauty', 'children playing', 'sports champion', 'effort', 'working people', 'mother', 'father', 'family', 'success', 'determination', 'strength', 'fighter'] },
-    { id: 'chaos', name: 'Caos', icon: '⚡', themes: ['chaos', 'storm', 'explosion', 'fire', 'destruction', 'turbulence', 'wild', 'intense'] },
-    { id: 'technology', name: 'Tecnología', icon: '💻', themes: ['technology', 'computer', 'digital', 'cyber', 'innovation', 'robot', 'futuristic', 'code'] },
-    { id: 'food', name: 'Gastronomía', icon: '🍽️', themes: ['food', 'restaurant', 'cooking', 'cuisine', 'meal', 'delicious', 'gastronomy', 'dish'] }
+    { id: 'nature', name: 'Naturaleza', icon: '🌿', themes: ['nature', 'mountains', 'forest', 'ocean', 'waterfall', 'landscape', 'wildlife', 'canyon', 'volcano', 'animals', 'microscopic'] },
+    { id: 'urban', name: 'Urbano', icon: '🏙️', themes: ['city', 'architecture', 'street', 'urban', 'building', 'skyline', 'metro', 'downtown', 'poverty', 'wealth', 'inequality', 'refugee'] },
+    { id: 'people', name: 'Retratos', icon: '👤', themes: ['portrait', 'people', 'face', 'person', 'human', 'emotion', 'expression', 'character', 'artists', 'desire', 'temptation', 'intimacy', 'passion'] },
+    { id: 'abstract', name: 'Abstracto', icon: '🎨', themes: ['abstract', 'patterns', 'minimal', 'gradient', 'texture', 'geometry', 'shapes', 'colors', 'microscopic', 'time', 'infinity', 'existence', 'euphoria', 'obsession'] },
+    { id: 'cinematic', name: 'Cinematográfico', icon: '🎬', themes: ['cinematic', 'dramatic', 'moody', 'noir', 'neon', 'atmospheric', 'epic', 'suspense', 'weapons', 'conspiracy', 'forbidden', 'seduction', 'villain', 'betrayal', 'surreal', 'hero'] },
+    { id: 'vintage', name: 'Vintage', icon: '📷', themes: ['vintage', 'retro', 'old', 'classic', 'nostalgia', 'antique', 'sepia', 'film'] },
+    { id: 'minimal', name: 'Minimalista', icon: '◻️', themes: ['minimal', 'simple', 'clean', 'space', 'white', 'zen', 'calm', 'empty', 'meditation', 'loneliness', 'serenity'] },
+    { id: 'night', name: 'Nocturno', icon: '🌙', themes: ['night', 'stars', 'moon', 'dark', 'evening', 'twilight', 'midnight', 'moonlight', 'universe', 'galaxy', 'cosmos'] },
+    { id: 'seasons', name: 'Estaciones', icon: '🍂', themes: ['autumn', 'spring', 'winter', 'summer', 'seasonal', 'foliage', 'blossom', 'snowfall'] },
+    { id: 'dark', name: 'Oscuro', icon: '🌑', themes: ['dark', 'shadow', 'black', 'mystery', 'darkness', 'gothic', 'silhouette', 'void', 'abyss', 'loneliness', 'melancholy', 'graveyard', 'cult', 'paranormal', 'witchcraft', 'occult', 'asylum', 'death', 'dystopia', 'apocalypse', 'imprisonment'] },
+    { id: 'inspiration', name: 'Inspiración', icon: '💪', themes: ['woman beauty', 'children playing', 'sports champion', 'effort', 'working people', 'mother', 'father', 'family', 'success', 'determination', 'strength', 'fighter', 'victory', 'achievement', 'perseverance', 'meditation', 'freedom', 'redemption', 'serenity', 'vulnerability', 'rebirth', 'identity'] },
+    { id: 'chaos', name: 'Caos', icon: '⚡', themes: ['chaos', 'storm', 'explosion', 'fire', 'destruction', 'turbulence', 'wild', 'intense', 'madness', 'frenzy', 'havoc', 'party', 'rumba', 'weapons', 'protest', 'rebellion', 'war', 'rage', 'revenge', 'pollution', 'addiction', 'sacrifice'] },
+    { id: 'technology', name: 'Tecnología', icon: '💻', themes: ['technology', 'computer', 'digital', 'cyber', 'innovation', 'robot', 'futuristic', 'code', 'circuit', 'matrix', 'data', 'microscopic'] },
+    { id: 'food', name: 'Gastronomía', icon: '🍽️', themes: ['food', 'restaurant', 'cooking', 'cuisine', 'meal', 'delicious', 'gastronomy', 'dish', 'dessert', 'gourmet', 'bakery'] }
 ];
 
 let selectedCategory = 'random';
 let pinnedImages = [];
 
-// Temas inspiradores para búsqueda
-const INSPIRING_THEMES = [
-    // Naturaleza
-    'nature', 'mountains', 'forest', 'ocean', 
-    'desert', 'aurora', 'waterfall', 'autumn',
-    'spring', 'winter', 'stars', 'clouds',
-    
-    // Urbano y arquitectura
-    'city', 'architecture', 'street', 'urban',
-    'abandoned', 'minimal', 'subway',
-    
-    // Cinematográfico
-    'cinematic', 'dramatic', 'silhouette', 
-    'moody', 'noir', 'neon', 'sunset',
-    
-    // Personas y emociones
-    'portrait', 'solitude', 'contemplation', 'people',
-    'candid',
-    
-    // Abstracto y artístico
-    'abstract', 'patterns', 'minimal',
-    'gradient', 'light', 'reflection',
-    
-    // Otros
-    'rain', 'misty', 'library', 'coffee',
-    'vintage', 'countryside', 'bridge'
-];
+// Función para obtener todos los temas de todas las categorías (dinámico)
+function getAllThemes() {
+    const allThemes = [];
+    IMAGE_CATEGORIES.forEach(category => {
+        if (category.themes && Array.isArray(category.themes)) {
+            allThemes.push(...category.themes);
+        }
+    });
+    // Eliminar duplicados (algunos temas pueden estar en múltiples categorías)
+    return [...new Set(allThemes)];
+}
 
 // Estado de la aplicación
 let currentState = {
@@ -350,18 +340,33 @@ async function loadRandomImage() {
     elements.imageLoader.classList.remove('hidden');
     elements.mainImage.style.opacity = '0';
 
-    // Alternar entre servicios
-    const source = IMAGE_SOURCES[currentSourceIndex];
-    currentSourceIndex = (currentSourceIndex + 1) % IMAGE_SOURCES.length;
-    
     // Seleccionar tema según categoría
     let theme;
+    let useOnlyExternalAPIs = false; // Flag para excluir imágenes de la comunidad
+    
     if (selectedCategory === 'random') {
-        theme = INSPIRING_THEMES[Math.floor(Math.random() * INSPIRING_THEMES.length)];
+        // Obtener todos los temas de todas las categorías dinámicamente
+        const allThemes = getAllThemes();
+        theme = allThemes[Math.floor(Math.random() * allThemes.length)];
     } else {
+        // Categoría específica seleccionada - NO usar imágenes de comunidad
+        useOnlyExternalAPIs = true;
         const category = IMAGE_CATEGORIES.find(c => c.id === selectedCategory);
         const themes = category.themes;
         theme = themes[Math.floor(Math.random() * themes.length)];
+    }
+
+    // Alternar entre servicios (excluyendo 'shared' si hay categoría específica)
+    let source;
+    if (useOnlyExternalAPIs) {
+        // Solo rotar entre APIs externas: Unsplash, Pexels, Pixabay, Wikimedia
+        const externalSources = ['unsplash', 'pexels', 'pixabay', 'wikimedia'];
+        source = externalSources[currentSourceIndex % externalSources.length];
+        currentSourceIndex = (currentSourceIndex + 1) % externalSources.length;
+    } else {
+        // Rotación normal incluyendo comunidad
+        source = IMAGE_SOURCES[currentSourceIndex];
+        currentSourceIndex = (currentSourceIndex + 1) % IMAGE_SOURCES.length;
     }
 
     try {
@@ -369,8 +374,20 @@ async function loadRandomImage() {
         
         if (source === 'unsplash') {
             imageData = await loadFromUnsplash(theme);
-        } else {
+        } else if (source === 'pexels') {
             imageData = await loadFromPexels(theme);
+        } else if (source === 'pixabay') {
+            imageData = await loadFromPixabay(theme);
+        } else if (source === 'wikimedia') {
+            imageData = await loadFromWikimedia(theme);
+        } else if (source === 'shared') {
+            imageData = await loadFromSharedImages();
+            
+            // Si no hay imágenes compartidas disponibles, usar Pexels como fallback
+            if (!imageData) {
+                console.log('⚠️ No hay imágenes compartidas, usando Pexels como fallback');
+                imageData = await loadFromPexels(theme);
+            }
         }
         
         if (imageData) {
@@ -389,8 +406,8 @@ async function loadRandomImage() {
 // Cargar desde Unsplash
 async function loadFromUnsplash(theme) {
     try {
-        // Probar sin query primero
-        const url = `https://api.unsplash.com/photos/random?orientation=landscape`;
+        // Sin restricción de orientación
+        const url = `https://api.unsplash.com/photos/random`;
         
         const response = await fetch(url, {
             headers: {
@@ -425,7 +442,7 @@ async function loadFromUnsplash(theme) {
 async function loadFromPexels(theme) {
     try {
         const response = await fetch(
-            `https://api.pexels.com/v1/search?query=${encodeURIComponent(theme)}&per_page=15&orientation=landscape`,
+            `https://api.pexels.com/v1/search?query=${encodeURIComponent(theme)}&per_page=15`,
             {
                 headers: {
                     'Authorization': PEXELS_API_KEY
@@ -455,6 +472,163 @@ async function loadFromPexels(theme) {
         };
     } catch (error) {
         console.error('Error con Pexels:', error);
+        return null;
+    }
+}
+
+// Cargar desde Pixabay
+async function loadFromPixabay(theme) {
+    try {
+        const response = await fetch(
+            `https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${encodeURIComponent(theme)}&image_type=photo&per_page=20`
+        );
+
+        if (!response.ok) throw new Error('Error en Pixabay API');
+
+        const data = await response.json();
+        
+        if (!data.hits || data.hits.length === 0) {
+            throw new Error('No se encontraron imágenes');
+        }
+        
+        // Seleccionar una foto aleatoria de los resultados
+        const photo = data.hits[Math.floor(Math.random() * data.hits.length)];
+        
+        return {
+            url: photo.largeImageURL,
+            thumbnail: photo.webformatURL,
+            photographer: photo.user,
+            photographerUrl: `https://pixabay.com/users/${photo.user}-${photo.user_id}/`,
+            sourceUrl: photo.pageURL,
+            sourceName: 'Pixabay',
+            alt: photo.tags || theme
+        };
+    } catch (error) {
+        console.error('Error con Pixabay:', error);
+        return null;
+    }
+}
+
+// Cargar desde Wikimedia Commons
+async function loadFromWikimedia(theme) {
+    try {
+        // Usar MediaWiki API para buscar imágenes sin restricción de orientación
+        const response = await fetch(
+            `https://commons.wikimedia.org/w/api.php?` +
+            `action=query&` +
+            `format=json&` +
+            `generator=search&` +
+            `gsrsearch=${encodeURIComponent(theme + ' photo')}&` +
+            `gsrnamespace=6&` + // Namespace 6 = Files
+            `gsrlimit=20&` +
+            `prop=imageinfo&` +
+            `iiprop=url|size|user|extmetadata&` +
+            `iiurlwidth=1200&` +
+            `origin=*` // CORS
+        );
+
+        if (!response.ok) throw new Error('Error en Wikimedia Commons API');
+
+        const data = await response.json();
+        
+        if (!data.query || !data.query.pages) {
+            throw new Error('No se encontraron imágenes');
+        }
+
+        // Convertir objeto pages a array
+        const pages = Object.values(data.query.pages);
+        
+        // Filtrar imágenes de calidad mínima
+        const validImages = pages.filter(page => {
+            const imageinfo = page.imageinfo?.[0];
+            return imageinfo && 
+                   imageinfo.url && 
+                   imageinfo.width >= 800 &&
+                   imageinfo.height >= 600;
+        });
+
+        if (validImages.length === 0) {
+            throw new Error('No se encontraron imágenes de calidad');
+        }
+
+        // Seleccionar una imagen aleatoria
+        const selected = validImages[Math.floor(Math.random() * validImages.length)];
+        const imageinfo = selected.imageinfo[0];
+        
+        // Extraer nombre del autor
+        const author = imageinfo.user || 
+                      imageinfo.extmetadata?.Artist?.value?.replace(/<[^>]*>/g, '') || 
+                      'Wikimedia contributor';
+
+        return {
+            url: imageinfo.url,
+            thumbnail: imageinfo.thumburl || imageinfo.url,
+            photographer: author,
+            photographerUrl: `https://commons.wikimedia.org/wiki/User:${encodeURIComponent(imageinfo.user || 'Unknown')}`,
+            sourceUrl: imageinfo.descriptionurl,
+            sourceName: 'Wikimedia Commons',
+            alt: selected.title?.replace('File:', '') || theme
+        };
+    } catch (error) {
+        console.error('Error con Wikimedia Commons:', error);
+        return null;
+    }
+}
+
+// Cargar desde imágenes compartidas por la comunidad
+async function loadFromSharedImages() {
+    try {
+        // Limpiar caché si es un nuevo día
+        const today = new Date().toDateString();
+        if (lastResetDate !== today) {
+            console.log('🔄 Nuevo día detectado, limpiando caché de imágenes vistas');
+            sharedImagesSeenToday = [];
+            lastResetDate = today;
+        }
+
+        // Solo cargar si hay usuario logueado
+        if (!window.currentUser || !window.imageBankInstance) {
+            return null;
+        }
+
+        // Obtener más imágenes para tener margen (filtraremos las ya vistas)
+        const sharedImages = await window.imageBankInstance.getRandomSharedImages(20);
+        
+        if (!sharedImages || sharedImages.length === 0) {
+            console.log('⚠️ No hay imágenes compartidas disponibles');
+            return null;
+        }
+
+        // Filtrar imágenes que NO hemos visto hoy
+        const unseenImages = sharedImages.filter(img => !sharedImagesSeenToday.includes(img.id));
+        
+        if (unseenImages.length === 0) {
+            console.log('⚠️ Ya viste todas las imágenes compartidas disponibles hoy');
+            // Resetear caché para dar otra oportunidad
+            sharedImagesSeenToday = [];
+            return null;
+        }
+
+        // Tomar la primera imagen no vista
+        const image = unseenImages[0];
+        
+        // Añadir al caché de vistas hoy
+        sharedImagesSeenToday.push(image.id);
+        console.log(`🌍 Imagen compartida cargada (${sharedImagesSeenToday.length} vistas hoy)`);
+        
+        return {
+            url: image.image_url,
+            thumbnail: image.thumbnail_url || image.image_url,
+            photographer: `${image.owner_username} (Comunidad)`,
+            photographerUrl: null,
+            sourceUrl: null,
+            sourceName: 'Comunidad',
+            alt: image.title || 'Imagen compartida',
+            sharedImageId: image.id, // Para rastrear el uso
+            usageCount: image.usage_count || 0
+        };
+    } catch (error) {
+        console.error('Error con imágenes compartidas:', error);
         return null;
     }
 }
@@ -878,6 +1052,20 @@ async function saveEntry() {
                 console.log('✅ Imagen del banco marcada como usada');
             } catch (error) {
                 console.error('Error al marcar imagen como usada:', error);
+            }
+        }
+
+        // Registrar uso de imagen compartida (si aplica)
+        if (currentState.imageData?.sharedImageId && !isUpdate) {
+            try {
+                const entryId = savedEntry.supabaseId || savedEntry.id;
+                await window.imageBankInstance.recordSharedImageUsage(
+                    currentState.imageData.sharedImageId,
+                    entryId
+                );
+                console.log('✅ Uso de imagen compartida registrado');
+            } catch (error) {
+                console.error('Error al registrar uso de imagen compartida:', error);
             }
         }
         

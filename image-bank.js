@@ -249,14 +249,190 @@ class ImageBank {
         }
     }
 
+    // Cargar TODAS las imágenes usadas en entradas del usuario (de cualquier fuente)
+    async loadUsedImagesFromEntries() {
+        if (!this.currentUser) return [];
+
+        try {
+            // Obtener todas las entradas del usuario que tengan imagen
+            const { data, error } = await supabaseClient
+                .from('entries')
+                .select('id, date, title, image, created_at')
+                .eq('user_id', this.currentUser.id)
+                .not('image', 'is', null)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            // Transformar a formato compatible con el banco de imágenes
+            return (data || []).map(entry => {
+                const imageData = typeof entry.image === 'string' ? JSON.parse(entry.image) : entry.image;
+                
+                return {
+                    id: `entry-${entry.id}`, // ID único basado en la entrada
+                    entry_id: entry.id,
+                    image_url: imageData.url,
+                    thumbnail_url: imageData.thumbnail || imageData.url,
+                    title: entry.title || 'Sin título',
+                    source: imageData.source || imageData.sourceName || 'Externa',
+                    photographer: imageData.photographer || 'Desconocido',
+                    used: true,
+                    used_at: entry.created_at,
+                    created_at: entry.created_at,
+                    // Metadata adicional
+                    isFromEntry: true // Flag para distinguir de imágenes del banco
+                };
+            });
+
+        } catch (error) {
+            console.error('Error al cargar imágenes usadas:', error);
+            return [];
+        }
+    }
+
     // Obtener imágenes disponibles (no usadas)
     getAvailableImages() {
         return this.images.filter(img => !img.used);
     }
 
     // Obtener imágenes ya usadas
-    getUsedImages() {
-        return this.images.filter(img => img.used);
+    async getUsedImages() {
+        // Imágenes del banco que están marcadas como usadas
+        const bankUsedImages = this.images.filter(img => img.used);
+        
+        // Todas las imágenes usadas en entradas (de cualquier fuente)
+        const entryImages = await this.loadUsedImagesFromEntries();
+        
+        // Combinar ambas listas, evitando duplicados
+        const combined = [...entryImages];
+        
+        // Añadir imágenes del banco que no estén ya en entryImages
+        bankUsedImages.forEach(bankImg => {
+            const alreadyExists = combined.some(img => 
+                img.entry_id === bankImg.entry_id || 
+                img.image_url === bankImg.image_url
+            );
+            
+            if (!alreadyExists) {
+                combined.push(bankImg);
+            }
+        });
+        
+        // Ordenar por fecha de uso (más reciente primero)
+        return combined.sort((a, b) => new Date(b.used_at || b.created_at) - new Date(a.used_at || a.created_at));
+    }
+
+    // Obtener imágenes compartidas (propias)
+    getSharedImages() {
+        return this.images.filter(img => img.is_shared);
+    }
+
+    // Compartir una imagen públicamente
+    async shareImage(imageId) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('user_images')
+                .update({
+                    is_shared: true,
+                    shared_at: new Date().toISOString()
+                })
+                .eq('id', imageId)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Actualizar lista local
+            const index = this.images.findIndex(img => img.id === imageId);
+            if (index !== -1) {
+                this.images[index] = data;
+            }
+
+            return data;
+
+        } catch (error) {
+            console.error('Error al compartir imagen:', error);
+            throw error;
+        }
+    }
+
+    // Dejar de compartir una imagen
+    async unshareImage(imageId) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('user_images')
+                .update({
+                    is_shared: false,
+                    shared_at: null
+                })
+                .eq('id', imageId)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Actualizar lista local
+            const index = this.images.findIndex(img => img.id === imageId);
+            if (index !== -1) {
+                this.images[index] = data;
+            }
+
+            return data;
+
+        } catch (error) {
+            console.error('Error al dejar de compartir imagen:', error);
+            throw error;
+        }
+    }
+
+    // Obtener imágenes compartidas aleatorias (de otros usuarios)
+    async getRandomSharedImages(limit = 10) {
+        if (!this.currentUser) return [];
+
+        try {
+            const { data, error } = await supabaseClient
+                .rpc('get_random_shared_images', {
+                    p_user_id: this.currentUser.id,
+                    p_limit: limit
+                });
+
+            if (error) throw error;
+            return data || [];
+
+        } catch (error) {
+            console.error('Error al obtener imágenes compartidas:', error);
+            return [];
+        }
+    }
+
+    // Registrar uso de imagen compartida
+    async recordSharedImageUsage(imageId, entryId) {
+        try {
+            // Registrar en la tabla de uso
+            const { error: usageError } = await supabaseClient
+                .from('shared_image_usage')
+                .insert({
+                    image_id: imageId,
+                    user_id: this.currentUser.id,
+                    used_in_entry_id: entryId
+                });
+
+            if (usageError) throw usageError;
+
+            // Incrementar contador de uso
+            const { error: countError } = await supabaseClient
+                .rpc('increment_shared_image_usage', {
+                    p_image_id: imageId
+                });
+
+            if (countError) throw countError;
+
+            return true;
+
+        } catch (error) {
+            console.error('Error al registrar uso de imagen compartida:', error);
+            throw error;
+        }
     }
 
     // Marcar imagen como usada
@@ -358,11 +534,14 @@ class ImageBank {
     }
 
     // Obtener estadísticas
-    getStats() {
+    async getStats() {
+        const usedImages = await this.getUsedImages();
+        
         return {
             total: this.images.length,
             available: this.getAvailableImages().length,
-            used: this.getUsedImages().length
+            shared: this.getSharedImages().length,
+            used: usedImages.length
         };
     }
 }
@@ -416,11 +595,20 @@ class ImageBankUI {
                                     <span class="stat-label">Disponibles</span>
                                 </div>
                                 <div class="stat-item">
+                                    <span class="stat-value" id="sharedImagesCount">0</span>
+                                    <span class="stat-label">Compartidas</span>
+                                </div>
+                                <div class="stat-item">
                                     <span class="stat-value" id="usedImagesCount">0</span>
                                     <span class="stat-label">Usadas</span>
                                 </div>
                             </div>
                             <div class="image-limit-indicator">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                                </svg>
                                 <span id="imageLimitIndicator">0/100</span>
                             </div>
                         </div>
@@ -430,6 +618,9 @@ class ImageBankUI {
                             <button class="image-bank-tab active" data-tab="available">
                                 Disponibles
                             </button>
+                            <button class="image-bank-tab" data-tab="shared">
+                                Compartidas
+                            </button>
                             <button class="image-bank-tab" data-tab="used">
                                 Ya Usadas
                             </button>
@@ -438,6 +629,13 @@ class ImageBankUI {
                         <!-- Galería de imágenes disponibles -->
                         <div id="availableImagesTab" class="image-bank-tab-content active">
                             <div id="availableImagesGrid" class="image-bank-grid">
+                                <!-- Se genera dinámicamente -->
+                            </div>
+                        </div>
+
+                        <!-- Galería de imágenes compartidas -->
+                        <div id="sharedImagesTab" class="image-bank-tab-content">
+                            <div id="sharedImagesGrid" class="image-bank-grid">
                                 <!-- Se genera dinámicamente -->
                             </div>
                         </div>
@@ -580,9 +778,9 @@ class ImageBankUI {
         await this.imageBank.loadUserImages();
         
         // Actualizar UI
-        this.updateStats();
+        await this.updateStats();
         this.renderAvailableImages();
-        this.renderUsedImages();
+        await this.renderUsedImages(); // Ahora es async
         
         console.log('🎨 Mostrando modal...');
         this.modal.classList.add('active');
@@ -605,8 +803,12 @@ class ImageBankUI {
 
         if (tabName === 'available') {
             document.getElementById('availableImagesTab').classList.add('active');
-        } else {
+        } else if (tabName === 'shared') {
+            document.getElementById('sharedImagesTab').classList.add('active');
+            this.renderSharedImages(); // Renderizar al abrir la pestaña
+        } else if (tabName === 'used') {
             document.getElementById('usedImagesTab').classList.add('active');
+            this.renderUsedImages(); // Renderizar al abrir la pestaña
         }
     }
 
@@ -646,7 +848,7 @@ class ImageBankUI {
                     
                     // Actualizar placeholder con la imagen real
                     this.updateLoadingPlaceholder(0, uploadedImage);
-                    this.updateStats();
+                    await this.updateStats();
                     
                     showToast('✅ Imagen subida correctamente', 'success');
                 } catch (error) {
@@ -673,7 +875,7 @@ class ImageBankUI {
                         
                         // Actualizar UI después de cada subida exitosa
                         this.updateLoadingPlaceholder(i, uploadedImage);
-                        this.updateStats();
+                        await this.updateStats();
                         
                     } catch (error) {
                         console.error(`Error subiendo ${file.name}:`, error);
@@ -741,6 +943,13 @@ class ImageBankUI {
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                 </button>
+                <button class="image-bank-item-btn share-btn" data-id="${uploadedImage.id}" title="Compartir públicamente">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                </button>
                 <button class="image-bank-item-btn delete-btn" data-id="${uploadedImage.id}" title="Eliminar">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"></polyline>
@@ -758,8 +967,16 @@ class ImageBankUI {
         }
         
         // Reattach event listeners para este item
+        const shareBtn = placeholder.querySelector('.share-btn');
         const useBtn = placeholder.querySelector('.use-btn');
         const deleteBtn = placeholder.querySelector('.delete-btn');
+        
+        if (shareBtn) {
+            shareBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleShareImage(uploadedImage.id);
+            });
+        }
         
         if (useBtn) {
             useBtn.addEventListener('click', (e) => {
@@ -806,12 +1023,13 @@ class ImageBankUI {
         `;
     }
 
-    updateStats() {
-        const stats = this.imageBank.getStats();
+    async updateStats() {
+        const stats = await this.imageBank.getStats();
         const maxImages = 100;
         
         document.getElementById('totalImagesCount').textContent = stats.total;
         document.getElementById('availableImagesCount').textContent = stats.available;
+        document.getElementById('sharedImagesCount').textContent = stats.shared;
         document.getElementById('usedImagesCount').textContent = stats.used;
         
         // Actualizar indicador de límite
@@ -868,6 +1086,15 @@ class ImageBankUI {
                     class="lazy-load"
                     loading="lazy">
                 <div class="image-bank-item-overlay">
+                    <button class="image-bank-item-btn share-btn ${img.is_shared ? 'shared' : ''}" 
+                            data-id="${img.id}" 
+                            title="${img.is_shared ? 'Dejar de compartir' : 'Compartir públicamente'}">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="${img.is_shared ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                    </button>
                     <button class="image-bank-item-btn use-btn" data-id="${img.id}" title="Usar para escribir">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <polyline points="20 6 9 17 4 12"></polyline>
@@ -891,16 +1118,13 @@ class ImageBankUI {
         this.initLazyLoad(grid);
     }
 
-    renderUsedImages() {
+    async renderUsedImages() {
         const grid = document.getElementById('usedImagesGrid');
         
-        // Mostrar skeleton mientras se determina si hay imágenes
-        if (!this.imageBank.images) {
-            grid.innerHTML = SkeletonUtils.imageBankSkeleton(12);
-            return;
-        }
+        // Mostrar skeleton mientras carga
+        grid.innerHTML = SkeletonUtils.imageBankSkeleton(12);
         
-        const images = this.imageBank.getUsedImages();
+        const images = await this.imageBank.getUsedImages();
 
         if (images.length === 0) {
             grid.innerHTML = `
@@ -920,11 +1144,43 @@ class ImageBankUI {
         }
 
         grid.innerHTML = images.map(img => {
-            const usedDate = new Date(img.used_at).toLocaleDateString('es-ES', {
+            const usedDate = new Date(img.used_at || img.created_at).toLocaleDateString('es-ES', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric'
             });
+
+            // Determinar origen de la imagen
+            let sourceLabel = '';
+            let sourceIcon = '';
+            
+            if (img.isFromEntry) {
+                if (img.source === 'user_bank' || img.source === 'Banco personal') {
+                    sourceIcon = '📁';
+                    sourceLabel = 'Banco personal';
+                } else if (img.source === 'Comunidad') {
+                    sourceIcon = '🌍';
+                    sourceLabel = 'Comunidad';
+                } else if (img.source === 'Unsplash') {
+                    sourceIcon = '📸';
+                    sourceLabel = 'Unsplash';
+                } else if (img.source === 'Pexels') {
+                    sourceIcon = '📷';
+                    sourceLabel = 'Pexels';
+                } else if (img.source === 'Pixabay') {
+                    sourceIcon = '🎨';
+                    sourceLabel = 'Pixabay';
+                } else if (img.source === 'Wikimedia Commons') {
+                    sourceIcon = '📚';
+                    sourceLabel = 'Wikimedia';
+                } else {
+                    sourceIcon = '🖼️';
+                    sourceLabel = img.source || 'Externa';
+                }
+            } else {
+                sourceIcon = '📁';
+                sourceLabel = 'Banco personal';
+            }
 
             return `
                 <div class="image-bank-item used" data-id="${img.id}" data-entry-id="${img.entry_id || ''}">
@@ -933,6 +1189,7 @@ class ImageBankUI {
                         alt="${img.title || 'Imagen'}"
                         class="lazy-load"
                         loading="lazy">
+                    <div class="image-source-badge">${sourceIcon} ${sourceLabel}</div>
                     <div class="image-bank-item-overlay">
                         <button class="image-bank-item-btn view-entry-btn" data-entry-id="${img.entry_id || ''}" title="Ver entrada">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -942,12 +1199,14 @@ class ImageBankUI {
                                 <line x1="16" y1="17" x2="8" y2="17"></line>
                             </svg>
                         </button>
+                        ${!img.isFromEntry ? `
                         <button class="image-bank-item-btn delete-btn" data-id="${img.id}" title="Eliminar">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"></polyline>
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                             </svg>
                         </button>
+                        ` : ''}
                     </div>
                     <p class="image-bank-item-title">${img.title || 'Sin título'}</p>
                     <p class="image-bank-item-date">Usada: ${usedDate}</p>
@@ -962,7 +1221,92 @@ class ImageBankUI {
         this.initLazyLoad(grid);
     }
 
+    async renderSharedImages() {
+        const grid = document.getElementById('sharedImagesGrid');
+        
+        // Mostrar skeleton mientras carga
+        grid.innerHTML = SkeletonUtils.imageBankSkeleton(12);
+        
+        // Cargar imágenes compartidas propias
+        const mySharedImages = this.imageBank.getSharedImages();
+
+        if (mySharedImages.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    <p>No has compartido ninguna imagen</p>
+                    <p class="empty-hint">Comparte imágenes desde la pestaña "Disponibles" usando el ícono 🌍</p>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = mySharedImages.map(img => {
+            const sharedDate = new Date(img.shared_at).toLocaleDateString('es-ES', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
+
+            return `
+                <div class="image-bank-item shared" data-id="${img.id}">
+                    <img 
+                        data-src="${img.thumbnail_url || img.image_url}" 
+                        alt="${img.title || 'Imagen'}"
+                        class="lazy-load"
+                        loading="lazy">
+                    ${img.usage_count > 0 ? `<div class="usage-badge">${img.usage_count} ${img.usage_count === 1 ? 'uso' : 'usos'}</div>` : ''}
+                    <div class="image-bank-item-overlay">
+                        <button class="image-bank-item-btn unshare-btn" data-id="${img.id}" title="Dejar de compartir">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                        ${!img.used ? `
+                        <button class="image-bank-item-btn use-btn" data-id="${img.id}" title="Usar para escribir">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </button>
+                        ` : ''}
+                    </div>
+                    <p class="image-bank-item-title">${img.title || 'Sin título'}</p>
+                    <p class="image-bank-item-date">Compartida: ${sharedDate}</p>
+                </div>
+            `;
+        }).join('');
+
+        // Attach event listeners
+        this.attachImageItemListeners(grid);
+        
+        // Activar lazy loading
+        this.initLazyLoad(grid);
+    }
+
     attachImageItemListeners(grid) {
+        // Botones "Compartir"
+        grid.querySelectorAll('.share-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const imageId = btn.dataset.id;
+                await this.toggleShareImage(imageId);
+            });
+        });
+
+        // Botones "Dejar de compartir"
+        grid.querySelectorAll('.unshare-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const imageId = btn.dataset.id;
+                await this.unshareImage(imageId);
+            });
+        });
+
         // Botones "Usar"
         grid.querySelectorAll('.use-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -1040,6 +1384,43 @@ class ImageBankUI {
         showToast('✅ Imagen seleccionada. ¡Empieza a escribir!', 'success');
     }
 
+    async toggleShareImage(imageId) {
+        const image = this.imageBank.images.find(img => img.id === imageId);
+        if (!image) return;
+
+        try {
+            if (image.is_shared) {
+                // Dejar de compartir
+                await this.imageBank.unshareImage(imageId);
+                showToast('✅ Imagen ya no es pública', 'success');
+            } else {
+                // Compartir
+                await this.imageBank.shareImage(imageId);
+                showToast('✅ Imagen compartida públicamente', 'success');
+            }
+
+            // Actualizar UI
+            this.renderAvailableImages();
+            
+        } catch (error) {
+            showToast('❌ Error al cambiar estado de compartir', 'error');
+        }
+    }
+
+    async unshareImage(imageId) {
+        try {
+            await this.imageBank.unshareImage(imageId);
+            showToast('✅ Imagen ya no es pública', 'success');
+            
+            // Actualizar UI
+            this.renderSharedImages();
+            this.renderAvailableImages();
+            
+        } catch (error) {
+            showToast('❌ Error al dejar de compartir', 'error');
+        }
+    }
+
     async deleteImage(imageId) {
         // Usar el modal de confirmación en lugar de alert
         const confirmed = await showConfirm('¿Estás seguro de que quieres eliminar esta imagen? Esta acción no se puede deshacer.');
@@ -1053,9 +1434,9 @@ class ImageBankUI {
             showToast('✅ Imagen eliminada', 'success');
             
             // Actualizar UI
-            this.updateStats();
+            await this.updateStats();
             this.renderAvailableImages();
-            this.renderUsedImages();
+            await this.renderUsedImages();
 
         } catch (error) {
             showToast('❌ Error al eliminar la imagen', 'error');
