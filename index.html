@@ -242,8 +242,11 @@
                     <h2>Feed Público</h2>
                     <button id="closeHistoryBtn" class="btn-close">&times;</button>
                 </div>
-                <div class="modal-body" id="historyList">
-                    <!-- El contenido se genera dinámicamente -->
+                <div class="modal-body">
+                    <!-- Entradas Públicas -->
+                    <div id="historyList">
+                        <!-- El contenido se genera dinámicamente -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -393,6 +396,38 @@
                 </div>
             </div>
         </div>
+
+        <!-- Panel lateral de comentarios (estilo Instagram) -->
+        <div id="commentsPanel" class="comments-panel">
+            <div class="comments-panel-header">
+                <h3 class="comments-panel-title">Comentarios</h3>
+                <button class="comments-panel-close" onclick="closeCommentsPanel()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="comments-panel-body" id="commentsPanelBody">
+                <div class="comments-loading">Cargando comentarios...</div>
+            </div>
+            <div class="comments-panel-footer" id="commentsPanelFooter" style="display: none;">
+                <textarea 
+                    id="commentsPanelInput" 
+                    class="comments-panel-input" 
+                    placeholder="Escribe un comentario..."
+                    maxlength="1000"
+                    rows="1"
+                ></textarea>
+                <button class="comments-panel-send" onclick="sendCommentFromPanel()" title="Enviar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div id="commentsPanelOverlay" class="comments-panel-overlay" onclick="closeCommentsPanel()"></div>
 
         <!-- Modal de categorías -->
         <div id="categoryModal" class="modal">
@@ -602,6 +637,30 @@
         </div>
     </div>
 
+    <!-- Modal para Escribir Entrada de Círculo -->
+    <div id="circleWriteEntryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button id="closeCircleWriteEntryBtn" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body" id="circleWriteEntryContent">
+                <!-- El contenido se genera dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Ver Entradas de Ejercicio -->
+    <div id="challengeEntriesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button id="closeChallengeEntriesBtn" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body" id="challengeEntriesContent">
+                <!-- El contenido se genera dinámicamente -->
+            </div>
+        </div>
+    </div>
+
     <!-- Confetti canvas -->
     <canvas id="confettiCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999;"></canvas>
 
@@ -637,6 +696,7 @@
     <script src="archive-manager.js"></script>
     <script src="circles-manager.js"></script>
     <script src="circles-ui.js"></script>
+    <script src="public-circles-feed.js"></script>
     <script src="image-bank.js"></script>
     <script src="settings-manager.js"></script>
     <script src="app.js"></script>

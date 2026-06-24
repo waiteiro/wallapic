@@ -24,7 +24,7 @@ class CirclesManager {
     // GESTIÓN DE CÍRCULOS
     // ========================================
 
-    async createCircle(name, description, coverColor = '#6366f1', maxMembers = 10) {
+    async createCircle(name, description, coverColor = '#6366f1', maxMembers = 12, isPublic = false) {
         if (!this.currentUserId) {
             throw new Error('Usuario no autenticado');
         }
@@ -54,7 +54,8 @@ class CirclesManager {
                 description,
                 creator_id: this.currentUserId,
                 cover_color: coverColor,
-                max_members: maxMembers
+                max_members: maxMembers,
+                is_public: isPublic
             }])
             .select()
             .single();
@@ -82,14 +83,37 @@ class CirclesManager {
         const { data: memberships, error } = await supabaseClient
             .from('circle_members')
             .select('*, circles(*)')
-            .eq('user_id', this.currentUserId);
+            .eq('user_id', this.currentUserId)
+            .order('joined_at', { ascending: false });
 
         if (error) throw error;
 
-        return memberships.map(m => ({
-            ...m.circles,
-            myRole: m.role
-        }));
+        // Para cada círculo, obtener el conteo de miembros
+        const circlesWithMembers = await Promise.all(
+            memberships.map(async (m) => {
+                const { data: members, error: membersError } = await supabaseClient
+                    .from('circle_members')
+                    .select('user_id')
+                    .eq('circle_id', m.circles.id);
+
+                if (membersError) {
+                    console.error('Error getting members count:', membersError);
+                    return {
+                        ...m.circles,
+                        myRole: m.role,
+                        memberCount: 0
+                    };
+                }
+
+                return {
+                    ...m.circles,
+                    myRole: m.role,
+                    memberCount: members?.length || 0
+                };
+            })
+        );
+
+        return circlesWithMembers;
     }
 
     async getCircleDetails(circleId) {
@@ -386,6 +410,51 @@ class CirclesManager {
         return data || null;
     }
 
+    async getAllChallenges(circleId) {
+        const { data, error } = await supabaseClient
+            .from('circle_challenges')
+            .select('*')
+            .eq('circle_id', circleId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    }
+
+    async deleteChallenge(challengeId) {
+        if (!this.currentUserId) {
+            throw new Error('Usuario no autenticado');
+        }
+
+        // Verificar que soy admin del círculo
+        const { data: challenge, error: challengeError } = await supabaseClient
+            .from('circle_challenges')
+            .select('circle_id')
+            .eq('id', challengeId)
+            .single();
+
+        if (challengeError) throw challengeError;
+
+        const { data: membership, error: membershipError } = await supabaseClient
+            .from('circle_members')
+            .select('role')
+            .eq('circle_id', challenge.circle_id)
+            .eq('user_id', this.currentUserId)
+            .single();
+
+        if (membershipError || membership.role !== 'admin') {
+            throw new Error('No tienes permisos para eliminar ejercicios');
+        }
+
+        // Eliminar el ejercicio (las entradas y likes se eliminan en cascada)
+        const { error } = await supabaseClient
+            .from('circle_challenges')
+            .delete()
+            .eq('id', challengeId);
+
+        if (error) throw error;
+    }
+
     async proposeChallenge(circleId, image, deadlineHours = 24) {
         if (!this.currentUserId) {
             throw new Error('Usuario no autenticado');
@@ -624,6 +693,325 @@ class CirclesManager {
             .eq('user_id', this.currentUserId);
 
         if (error) throw error;
+    }
+
+    // ========================================
+    // CÍRCULOS PÚBLICOS
+    // ========================================
+
+    async getPublicCircles(offset = 0, limit = 12) {
+        const { data, error } = await supabaseClient
+            .from('circles')
+            .select('*, circle_members(count), users!creator_id(username)')
+            .eq('is_public', true)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+
+        return data.map(circle => ({
+            ...circle,
+            memberCount: circle.circle_members[0]?.count || 0,
+            creatorUsername: circle.users?.username || 'Desconocido'
+        }));
+    }
+
+    async requestToJoinCircle(circleId) {
+        if (!this.currentUserId) {
+            throw new Error('Usuario no autenticado');
+        }
+
+        // Verificar que el círculo es público
+        const { data: circle, error: circleError } = await supabaseClient
+            .from('circles')
+            .select('is_public, max_members')
+            .eq('id', circleId)
+            .single();
+
+        if (circleError) throw circleError;
+
+        if (!circle.is_public) {
+            throw new Error('Este círculo es privado');
+        }
+
+        // Verificar que no sea ya miembro
+        const { data: existing } = await supabaseClient
+            .from('circle_members')
+            .select('id')
+            .eq('circle_id', circleId)
+            .eq('user_id', this.currentUserId)
+            .single();
+
+        if (existing) {
+            throw new Error('Ya eres miembro de este círculo');
+        }
+
+        // Verificar que no haya solicitado antes
+        const { data: existingRequest } = await supabaseClient
+            .from('circle_join_requests')
+            .select('id, status')
+            .eq('circle_id', circleId)
+            .eq('user_id', this.currentUserId)
+            .single();
+
+        if (existingRequest) {
+            if (existingRequest.status === 'pending') {
+                throw new Error('Ya enviaste una solicitud a este círculo');
+            } else if (existingRequest.status === 'rejected') {
+                throw new Error('Tu solicitud fue rechazada anteriormente');
+            }
+        }
+
+        // Verificar límite de círculos como invitado
+        const { data: allMemberships, error: membershipError } = await supabaseClient
+            .from('circle_members')
+            .select('id')
+            .eq('user_id', this.currentUserId);
+
+        if (membershipError) throw membershipError;
+
+        if (allMemberships && allMemberships.length >= 25) {
+            throw new Error('Has alcanzado el límite de 25 círculos totales');
+        }
+
+        const { data: ownedCircles, error: ownedError } = await supabaseClient
+            .from('circles')
+            .select('id')
+            .eq('creator_id', this.currentUserId);
+
+        if (ownedError) throw ownedError;
+
+        const ownedCount = ownedCircles ? ownedCircles.length : 0;
+        const invitedCount = allMemberships.length - ownedCount;
+
+        if (invitedCount >= 15) {
+            throw new Error('Has alcanzado el límite de 15 círculos como invitado');
+        }
+
+        // Verificar que el círculo no esté lleno
+        const { data: members, error: membersError } = await supabaseClient
+            .from('circle_members')
+            .select('id')
+            .eq('circle_id', circleId);
+
+        if (membersError) throw membersError;
+
+        if (members && members.length >= circle.max_members) {
+            throw new Error('El círculo está lleno');
+        }
+
+        // Crear solicitud
+        const { data, error } = await supabaseClient
+            .from('circle_join_requests')
+            .insert([{
+                circle_id: circleId,
+                user_id: this.currentUserId,
+                username: this.currentUsername,
+                status: 'pending'
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+
+    async getPendingJoinRequests(circleId) {
+        const { data, error } = await supabaseClient
+            .from('circle_join_requests')
+            .select('*')
+            .eq('circle_id', circleId)
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
+    }
+
+    async getPendingJoinRequestsCount() {
+        if (!this.currentUserId) return 0;
+
+        try {
+            // Obtener círculos donde soy admin
+            const { data: adminCircles, error: circlesError } = await supabaseClient
+                .from('circle_members')
+                .select('circle_id')
+                .eq('user_id', this.currentUserId)
+                .eq('role', 'admin');
+
+            if (circlesError || !adminCircles || adminCircles.length === 0) return 0;
+
+            const circleIds = adminCircles.map(c => c.circle_id);
+
+            // Contar solicitudes pendientes en esos círculos
+            const { data, error } = await supabaseClient
+                .from('circle_join_requests')
+                .select('id')
+                .in('circle_id', circleIds)
+                .eq('status', 'pending');
+
+            if (error) {
+                console.error('Error counting join requests:', error);
+                return 0;
+            }
+
+            return data ? data.length : 0;
+        } catch (error) {
+            console.error('Error counting join requests:', error);
+            return 0;
+        }
+    }
+
+    async respondToJoinRequest(requestId, accept) {
+        if (!this.currentUserId) {
+            throw new Error('Usuario no autenticado');
+        }
+
+        // Obtener la solicitud
+        const { data: request, error: requestError } = await supabaseClient
+            .from('circle_join_requests')
+            .select('*')
+            .eq('id', requestId)
+            .single();
+
+        if (requestError) throw requestError;
+
+        // Verificar que soy admin del círculo
+        const { data: membership, error: membershipError } = await supabaseClient
+            .from('circle_members')
+            .select('role')
+            .eq('circle_id', request.circle_id)
+            .eq('user_id', this.currentUserId)
+            .single();
+
+        if (membershipError || membership.role !== 'admin') {
+            throw new Error('No tienes permisos para gestionar solicitudes');
+        }
+
+        // Actualizar estado de la solicitud
+        const { error: updateError } = await supabaseClient
+            .from('circle_join_requests')
+            .update({
+                status: accept ? 'accepted' : 'rejected',
+                responded_at: new Date().toISOString()
+            })
+            .eq('id', requestId);
+
+        if (updateError) throw updateError;
+
+        // Si acepta, agregar como miembro
+        if (accept) {
+            // Verificar límites antes de agregar
+            const { data: circle, error: circleError } = await supabaseClient
+                .from('circles')
+                .select('max_members')
+                .eq('id', request.circle_id)
+                .single();
+
+            if (circleError) throw circleError;
+
+            const { data: members, error: membersError } = await supabaseClient
+                .from('circle_members')
+                .select('id')
+                .eq('circle_id', request.circle_id);
+
+            if (membersError) throw membersError;
+
+            if (members && members.length >= circle.max_members) {
+                throw new Error('El círculo está lleno');
+            }
+
+            const { error: memberError } = await supabaseClient
+                .from('circle_members')
+                .insert([{
+                    circle_id: request.circle_id,
+                    user_id: request.user_id,
+                    role: 'member'
+                }]);
+
+            if (memberError) throw memberError;
+        }
+    }
+
+    async closeCircle(circleId) {
+        if (!this.currentUserId) {
+            throw new Error('Usuario no autenticado');
+        }
+
+        // Verificar que soy admin
+        const { data: membership, error: membershipError } = await supabaseClient
+            .from('circle_members')
+            .select('role')
+            .eq('circle_id', circleId)
+            .eq('user_id', this.currentUserId)
+            .single();
+
+        if (membershipError || membership.role !== 'admin') {
+            throw new Error('No tienes permisos para cerrar este círculo');
+        }
+
+        // Cambiar círculo a privado
+        const { error } = await supabaseClient
+            .from('circles')
+            .update({ is_public: false })
+            .eq('id', circleId);
+
+        if (error) throw error;
+    }
+
+    // ========================================
+    // CÍRCULOS FIJADOS
+    // ========================================
+
+    async getPinnedCircles() {
+        if (!this.currentUserId) return [];
+
+        const { data, error } = await supabaseClient
+            .from('users')
+            .select('pinned_circles')
+            .eq('id', this.currentUserId)
+            .single();
+
+        if (error) {
+            console.error('Error getting pinned circles:', error);
+            return [];
+        }
+
+        return data?.pinned_circles || [];
+    }
+
+    async togglePinCircle(circleId) {
+        if (!this.currentUserId) {
+            throw new Error('Usuario no autenticado');
+        }
+
+        // Obtener círculos fijados actuales
+        const pinnedCircles = await this.getPinnedCircles();
+        const isPinned = pinnedCircles.includes(circleId);
+
+        let newPinnedCircles;
+
+        if (isPinned) {
+            // Desfijar
+            newPinnedCircles = pinnedCircles.filter(id => id !== circleId);
+        } else {
+            // Verificar límite de 3
+            if (pinnedCircles.length >= 3) {
+                throw new Error('Solo puedes fijar hasta 3 círculos');
+            }
+            // Fijar
+            newPinnedCircles = [...pinnedCircles, circleId];
+        }
+
+        // Actualizar en la base de datos
+        const { error } = await supabaseClient
+            .from('users')
+            .update({ pinned_circles: newPinnedCircles })
+            .eq('id', this.currentUserId);
+
+        if (error) throw error;
+
+        return { isPinned: !isPinned, pinnedCircles: newPinnedCircles };
     }
 }
 

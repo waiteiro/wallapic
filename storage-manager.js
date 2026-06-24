@@ -45,6 +45,12 @@ async function saveEntryToStorage(entry) {
             if (error) throw error;
             
             console.log('✅ Entrada guardada en Supabase');
+            
+            // Si es pública, limpiar caché de moods para que aparezca inmediatamente
+            if (entry.isPublic && typeof window.clearMoodCache === 'function') {
+                window.clearMoodCache();
+            }
+            
             return { ...entry, supabaseId: data.id };
             
         } catch (error) {
@@ -83,7 +89,7 @@ async function updateEntryInStorage(entry) {
                     writing_seconds: entry.writingSeconds || null,
                     completed_with_timer: entry.completedWithTimer || false,
                     timer_seconds_used: entry.timerSecondsUsed || null,
-                    updated_at: new Date().toISOString()
+                    updated_at: window.getLocalISOString()
                 })
                 .eq('id', entry.supabaseId)
                 .eq('user_id', user.id)
@@ -98,7 +104,7 @@ async function updateEntryInStorage(entry) {
             return { 
                 ...entry,
                 supabaseId: data.id,
-                updatedAt: data.updated_at || new Date().toISOString()
+                updatedAt: data.updated_at || window.getLocalISOString()
             };
             
         } catch (error) {
@@ -113,7 +119,7 @@ async function updateEntryInStorage(entry) {
         const index = entries.findIndex(e => e.id === entry.id);
         
         if (index !== -1) {
-            entries[index] = { ...entry, updatedAt: entry.updatedAt || new Date().toISOString() };
+            entries[index] = { ...entry, updatedAt: entry.updatedAt || window.getLocalISOString() };
             localStorage.setItem('wallapic_entries', JSON.stringify(entries));
             console.log('✅ Entrada actualizada en localStorage');
             return entries[index];
@@ -156,7 +162,7 @@ async function updateEntryFieldsInStorage(entryId, supabaseId, updates) {
         const index = entries.findIndex(e => e.id === entryId);
         
         if (index !== -1) {
-            entries[index] = { ...entries[index], ...updates, updatedAt: new Date().toISOString() };
+            entries[index] = { ...entries[index], ...updates, updatedAt: window.getLocalISOString() };
             localStorage.setItem('wallapic_entries', JSON.stringify(entries));
             console.log('✅ Campos actualizados en localStorage');
             return true;
@@ -278,6 +284,12 @@ async function makeEntryPublic(entryId, supabaseId) {
         if (error) throw error;
         
         console.log('✅ Entrada marcada como pública');
+        
+        // Limpiar caché de moods para que aparezca la nueva entrada
+        if (typeof window.clearMoodCache === 'function') {
+            window.clearMoodCache();
+        }
+        
         return true;
         
     } catch (error) {
@@ -302,6 +314,12 @@ async function makeEntryPrivate(entryId, supabaseId) {
         if (error) throw error;
         
         console.log('✅ Entrada marcada como privada');
+        
+        // Limpiar caché de moods para que se actualice
+        if (typeof window.clearMoodCache === 'function') {
+            window.clearMoodCache();
+        }
+        
         return true;
         
     } catch (error) {
