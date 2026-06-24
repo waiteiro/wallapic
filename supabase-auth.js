@@ -97,6 +97,11 @@ async function initAuth() {
         }
     }
     
+    // Iniciar polling del indicador de nuevas entradas en Feed Público
+    if (typeof startFeedIndicatorPolling === 'function') {
+        startFeedIndicatorPolling();
+    }
+    
     // Event listeners para auth modal
     const profileBtn = document.getElementById('profileBtn');
     if (profileBtn) {
@@ -313,6 +318,9 @@ async function handleLogin() {
             circlesUI.updateNotificationBadge();
         }
         
+        // Disparar evento para que otros módulos sepan que el usuario inició sesión
+        window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: currentUser }));
+        
         showAuthSuccess(`Bienvenido, ${username}`);
         setTimeout(() => {
             closeAuthModal();
@@ -409,18 +417,25 @@ function closeAuthModal() {
 // ============================================
 
 // Cargar feed público (solo entradas marcadas como públicas)
-async function loadPublicFeed(limit = 100) {
+async function loadPublicFeed(limit = 100, mood = null, offset = 0) {
     if (!window.supabaseClient) {
         return [];
     }
     
     try {
-        const { data, error } = await window.supabaseClient
+        let query = window.supabaseClient
             .from('entries')
             .select('*')
-            .eq('is_public', true)
+            .eq('is_public', true);
+        
+        // Filtrar por mood si se especifica
+        if (mood) {
+            query = query.eq('mood', mood);
+        }
+        
+        const { data, error } = await query
             .order('created_at', { ascending: false })
-            .limit(limit);
+            .range(offset, offset + limit - 1);
         
         if (error) throw error;
         return data || [];
@@ -430,14 +445,167 @@ async function loadPublicFeed(limit = 100) {
     }
 }
 
+// Contar entradas por mood (para mostrar totales sin cargar todo)
+async function countEntriesByMood(mood) {
+    if (!window.supabaseClient) return 0;
+    
+    try {
+        const { count, error } = await window.supabaseClient
+            .from('entries')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_public', true)
+            .eq('mood', mood);
+        
+        if (error) throw error;
+        return count || 0;
+    } catch (error) {
+        console.error('Error contando entradas:', error);
+        return 0;
+    }
+}
+
+// ============================================
+// INDICADOR DE NUEVAS ENTRADAS EN FEED PÚBLICO
+// ============================================
+
+// Verificar si hay nuevas entradas públicas en las últimas 24 horas
+async function checkNewPublicEntries() {
+    if (!window.supabaseClient) {
+        return false;
+    }
+    
+    try {
+        // Obtener timestamp de hace 24 horas
+        const now = new Date();
+        const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        const timestamp24h = twentyFourHoursAgo.toISOString();
+        
+        // Consultar si hay entradas públicas recientes
+        const { data, error } = await window.supabaseClient
+            .from('entries')
+            .select('id')
+            .eq('is_public', true)
+            .gte('created_at', timestamp24h)
+            .limit(1);
+        
+        if (error) throw error;
+        
+        // Si hay al menos una entrada reciente, mostrar indicador
+        return data && data.length > 0;
+    } catch (error) {
+        console.error('Error verificando nuevas entradas:', error);
+        return false;
+    }
+}
+
+// Actualizar indicador visual en el botón de Feed Público
+async function updateFeedIndicator() {
+    const historyBtn = document.getElementById('historyBtn');
+    if (!historyBtn) return;
+    
+    // Verificar si hay nuevas entradas
+    const hasNewEntries = await checkNewPublicEntries();
+    
+    // Buscar o crear el indicador
+    let indicator = historyBtn.querySelector('.feed-new-indicator');
+    
+    if (hasNewEntries) {
+        // Mostrar indicador si no existe
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.className = 'feed-new-indicator';
+            historyBtn.appendChild(indicator);
+        }
+    } else {
+        // Ocultar indicador si existe
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+}
+
+// Iniciar polling del indicador (cada 2 minutos)
+function startFeedIndicatorPolling() {
+    // Actualizar inmediatamente
+    updateFeedIndicator();
+    
+    // Actualizar cada 2 minutos
+    setInterval(updateFeedIndicator, 2 * 60 * 1000);
+}
+
+// Ocultar indicador cuando se abre el feed (usuario ya vio las nuevas entradas)
+function clearFeedIndicator() {
+    const historyBtn = document.getElementById('historyBtn');
+    if (!historyBtn) return;
+    
+    const indicator = historyBtn.querySelector('.feed-new-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
 // Caché para conteo de favoritos (evitar múltiples llamadas)
 const favoritesCache = new Map();
 const cacheExpiry = 60000; // 1 minuto
+
+// ============================================
+// SISTEMA DE CACHÉ INTELIGENTE PARA MOODS
+// ============================================
+
+const moodCache = {
+    data: new Map(), // Map<mood, {entries, timestamp, totalCount, offset}>
+    expiryTime: 15 * 60 * 1000, // 15 minutos
+    
+    // Guardar datos en caché
+    set(mood, entries, totalCount, offset) {
+        this.data.set(mood, {
+            entries: [...entries], // Clonar array
+            timestamp: Date.now(),
+            totalCount,
+            offset
+        });
+    },
+    
+    // Obtener datos del caché
+    get(mood) {
+        const cached = this.data.get(mood);
+        if (!cached) return null;
+        
+        // Verificar si expiró
+        if (Date.now() - cached.timestamp > this.expiryTime) {
+            this.data.delete(mood);
+            return null;
+        }
+        
+        return cached;
+    },
+    
+    // Agregar más entradas al caché existente
+    append(mood, newEntries, newOffset) {
+        const cached = this.data.get(mood);
+        if (!cached) return;
+        
+        cached.entries.push(...newEntries);
+        cached.offset = newOffset;
+    },
+    
+    // Limpiar caché (opcional, para forzar recarga)
+    clear(mood = null) {
+        if (mood) {
+            this.data.delete(mood);
+        } else {
+            this.data.clear();
+        }
+    }
+};
 
 // Renderizar feed público
 async function renderPublicFeed() {
     const feedList = document.getElementById('historyList');
     if (!feedList) return;
+    
+    // Limpiar el indicador cuando se abre el feed
+    clearFeedIndicator();
     
     // Limpiar scroll handler de mood view si existe
     if (window.moodScrollHandler) {
@@ -456,7 +624,19 @@ async function renderPublicFeed() {
     // Cargar solo las necesarias para las secciones iniciales (optimización)
     const entries = await loadPublicFeed(50);
     
-    if (entries.length === 0) {
+    // CARGAR CÍRCULOS PÚBLICOS ANTES DE DECIDIR SI MOSTRAR VACÍO
+    let hasPublicCircles = false;
+    if (typeof loadPublicCirclesFeed === 'function') {
+        try {
+            await loadPublicCirclesFeed();
+            const publicCirclesBlock = document.getElementById('publicCirclesBlock');
+            hasPublicCircles = publicCirclesBlock && publicCirclesBlock.style.display === 'block';
+        } catch (err) {
+            console.error('Error loading public circles in feed:', err);
+        }
+    }
+    
+    if (entries.length === 0 && !hasPublicCircles) {
         feedList.innerHTML = `
             <div class="feed-empty">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.3; margin-bottom: 1rem;">
@@ -471,18 +651,25 @@ async function renderPublicFeed() {
         return;
     }
     
+    if (entries.length === 0 && hasPublicCircles) {
+        // Hay círculos públicos pero no entradas, no mostrar mensaje de vacío
+        feedList.innerHTML = '';
+        feedList.classList.remove('feed-mood-view');
+        return;
+    }
+    
     // Remover clase de vista mood
     feedList.classList.remove('feed-mood-view');
     
-    // Calcular las 3 más recientes
-    const recent = entries.slice(0, 3);
+    // Calcular las 6 más recientes
+    const recent = entries.slice(0, 6);
     
     // Calcular las 3 con más favoritos (optimizado con batch)
     const entriesWithFavorites = await getFavoritesCountBatch(entries);
     
-    // Solo incluir entradas que tengan al menos 1 favorito
+    // Solo incluir entradas que tengan 3 o más favoritos
     const trending = entriesWithFavorites
-        .filter(e => e.favoriteCount > 0)
+        .filter(e => e.favoriteCount >= 3)
         .sort((a, b) => b.favoriteCount - a.favoriteCount)
         .slice(0, 3);
     
@@ -501,16 +688,6 @@ async function renderPublicFeed() {
                 </div>
             </section>
             
-            <!-- Sección Tendencias (solo si hay entradas con favoritos) -->
-            ${trending.length > 0 ? `
-                <section class="feed-section">
-                    <h3 class="feed-section-title">Tendencias</h3>
-                    <div class="feed-container feed-container-3col">
-                        ${trending.map(entry => generateFeedCard(entry)).join('')}
-                    </div>
-                </section>
-            ` : ''}
-            
             <!-- Sección Explora por Moods -->
             <section class="feed-section">
                 <h3 class="feed-section-title">Explora por Moods</h3>
@@ -527,6 +704,16 @@ async function renderPublicFeed() {
                     }).join('')}
                 </div>
             </section>
+            
+            <!-- Sección Tendencias (solo si hay entradas con 3+ favoritos) -->
+            ${trending.length > 0 ? `
+                <section class="feed-section">
+                    <h3 class="feed-section-title">Tendencias</h3>
+                    <div class="feed-container feed-container-3col">
+                        ${trending.map(entry => generateFeedCard(entry)).join('')}
+                    </div>
+                </section>
+            ` : ''}
         </div>
     `;
     
@@ -536,8 +723,10 @@ async function renderPublicFeed() {
 // Generar HTML de una card de feed
 function generateFeedCard(entry) {
     const preview = entry.text.length > 150 ? entry.text.substring(0, 150) + '...' : entry.text;
+    // Almacenar datos en atributo para acceso optimista
+    const entryJson = encodeURIComponent(JSON.stringify(entry));
     return `
-        <article class="feed-card" onclick="viewPublicEntry('${entry.id}')">
+        <article class="feed-card" onclick="viewPublicEntryOptimistic('${entry.id}', this)" data-entry="${entryJson}">
             ${entry.image ? `
                 <div class="feed-card-image">
                     <img src="${entry.image.thumbnail || entry.image.url}" alt="${entry.image.alt || ''}" loading="lazy">
@@ -563,6 +752,21 @@ function generateFeedCard(entry) {
             </div>
         </article>
     `;
+}
+
+// Wrapper optimista para viewPublicEntry (desde tarjetas del feed)
+function viewPublicEntryOptimistic(entryId, element) {
+    const entryJson = element.getAttribute('data-entry');
+    if (entryJson) {
+        try {
+            const entryData = JSON.parse(decodeURIComponent(entryJson));
+            viewPublicEntry(entryId, entryData);
+        } catch (e) {
+            viewPublicEntry(entryId);
+        }
+    } else {
+        viewPublicEntry(entryId);
+    }
 }
 
 // Obtener conteo de favoritos para una entrada (con caché)
@@ -652,27 +856,68 @@ async function showMoodEntries(mood) {
     // Mostrar skeleton mientras carga
     feedList.innerHTML = SkeletonUtils.archiveSkeleton(6);
     
-    const entries = await loadPublicFeed();
-    const filtered = entries.filter(e => e.mood === mood);
+    // Intentar usar caché primero
+    const cached = moodCache.get(mood);
+    let totalCount = 0;
     
-    if (filtered.length === 0) {
-        feedList.innerHTML = `
-            <div class="feed-empty">
-                <p style="font-size: 1rem; margin-bottom: 1rem;">No hay entradas en ${mood}</p>
-                <button class="feed-back-btn" onclick="renderPublicFeed()">← Volver al feed</button>
-            </div>
-        `;
-        return;
+    if (cached) {
+        // Usar datos cacheados
+        console.log(`📦 Usando caché para mood: ${mood}`);
+        
+        // Inicializar estado con datos cacheados
+        moodViewState = {
+            mood: mood,
+            allEntries: cached.entries,
+            displayedCount: 0,
+            batchSize: 20,
+            isLoading: false,
+            totalCount: cached.totalCount,
+            offset: cached.offset,
+            hasMore: cached.entries.length < cached.totalCount
+        };
+        
+        totalCount = cached.totalCount;
+    } else {
+        // Cargar desde BD con paginación
+        console.log(`🔄 Cargando desde BD mood: ${mood}`);
+        
+        const [entries, count] = await Promise.all([
+            loadPublicFeed(20, mood, 0), // Solo primeros 20
+            countEntriesByMood(mood)
+        ]);
+        
+        if (entries.length === 0 && count === 0) {
+            feedList.innerHTML = `
+                <div class="feed-empty">
+                    <p style="font-size: 1rem; margin-bottom: 1rem;">No hay entradas en ${mood}</p>
+                    <button class="feed-back-btn" onclick="renderPublicFeed()">← Volver al feed</button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Guardar en caché
+        moodCache.set(mood, entries, count, 20);
+        
+        // Inicializar estado
+        moodViewState = {
+            mood: mood,
+            allEntries: entries,
+            displayedCount: 0,
+            batchSize: 20,
+            isLoading: false,
+            totalCount: count,
+            offset: 20,
+            hasMore: entries.length < count
+        };
+        
+        totalCount = count;
+        
+        // PRECARGA OPTIMISTA: Cargar siguiente batch en background
+        if (entries.length < count) {
+            setTimeout(() => preloadNextBatch(mood), 500);
+        }
     }
-    
-    // Inicializar estado para infinite scroll
-    moodViewState = {
-        mood: mood,
-        allEntries: filtered,
-        displayedCount: 0,
-        batchSize: 20,
-        isLoading: false
-    };
     
     // Agregar clase para indicar vista de mood
     feedList.classList.add('feed-mood-view');
@@ -681,7 +926,7 @@ async function showMoodEntries(mood) {
     feedList.innerHTML = `
         <div class="feed-mood-header">
             <button class="feed-back-btn" onclick="renderPublicFeed()">← Volver</button>
-            <h3 class="feed-mood-title">${getMoodIcon(mood)} ${mood} (${filtered.length})</h3>
+            <h3 class="feed-mood-title">${getMoodIcon(mood)} ${mood} (${totalCount})</h3>
         </div>
         <div class="feed-list" id="moodFeedList">
             <!-- Las entradas se cargan aquí -->
@@ -698,15 +943,47 @@ async function showMoodEntries(mood) {
     setupMoodInfiniteScroll();
 }
 
-// Cargar más entradas en vista de mood
-function loadMoreMoodEntries() {
-    if (moodViewState.isLoading) return;
-    if (moodViewState.displayedCount >= moodViewState.allEntries.length) return;
+// PRECARGA OPTIMISTA: Cargar siguiente batch en background
+async function preloadNextBatch(mood) {
+    if (!moodViewState || moodViewState.mood !== mood) return;
+    if (!moodViewState.hasMore) return;
     
-    moodViewState.isLoading = true;
+    console.log(`⚡ Precargando batch para ${mood}...`);
+    
+    try {
+        const nextEntries = await loadPublicFeed(20, mood, moodViewState.offset);
+        if (nextEntries.length > 0) {
+            // Agregar al estado y caché
+            moodViewState.allEntries.push(...nextEntries);
+            moodViewState.offset += nextEntries.length;
+            moodViewState.hasMore = nextEntries.length === 20;
+            
+            moodCache.append(mood, nextEntries, moodViewState.offset);
+            
+            console.log(`✅ Precargado ${nextEntries.length} entradas`);
+        }
+    } catch (error) {
+        console.error('Error en precarga:', error);
+    }
+}
+
+// Cargar más entradas en vista de mood (con paginación real)
+async function loadMoreMoodEntries() {
+    if (moodViewState.isLoading) return;
     
     const feedListEl = document.getElementById('moodFeedList');
     if (!feedListEl) return;
+    
+    // Si ya mostramos todo lo que tenemos en memoria
+    if (moodViewState.displayedCount >= moodViewState.allEntries.length) {
+        // Verificar si hay más en BD
+        if (moodViewState.hasMore && !moodViewState.isLoading) {
+            await loadMoreFromDatabase();
+        }
+        return;
+    }
+    
+    moodViewState.isLoading = true;
     
     const start = moodViewState.displayedCount;
     const end = Math.min(start + moodViewState.batchSize, moodViewState.allEntries.length);
@@ -714,8 +991,9 @@ function loadMoreMoodEntries() {
     
     const batchHTML = batch.map(entry => {
         const preview = entry.text.length > 200 ? entry.text.substring(0, 200) + '...' : entry.text;
+        const entryJson = encodeURIComponent(JSON.stringify(entry));
         return `
-            <article class="feed-list-item" onclick="viewPublicEntry('${entry.id}')">
+            <article class="feed-list-item" onclick="viewPublicEntryOptimistic('${entry.id}', this)" data-entry="${entryJson}">
                 ${entry.image ? `
                     <div class="feed-list-image">
                         <img src="${entry.image.thumbnail || entry.image.url}" alt="${entry.image.alt || ''}" loading="lazy">
@@ -739,6 +1017,43 @@ function loadMoreMoodEntries() {
     feedListEl.insertAdjacentHTML('beforeend', batchHTML);
     moodViewState.displayedCount = end;
     moodViewState.isLoading = false;
+    
+    // Si llegamos cerca del final, precargar siguiente batch
+    if (end >= moodViewState.allEntries.length - 10 && moodViewState.hasMore) {
+        preloadNextBatch(moodViewState.mood);
+    }
+}
+
+// Cargar más entradas desde la base de datos
+async function loadMoreFromDatabase() {
+    if (moodViewState.isLoading || !moodViewState.hasMore) return;
+    
+    moodViewState.isLoading = true;
+    const indicator = document.getElementById('moodLoadingIndicator');
+    if (indicator) indicator.style.display = 'block';
+    
+    try {
+        const newEntries = await loadPublicFeed(20, moodViewState.mood, moodViewState.offset);
+        
+        if (newEntries.length > 0) {
+            moodViewState.allEntries.push(...newEntries);
+            moodViewState.offset += newEntries.length;
+            moodViewState.hasMore = newEntries.length === 20;
+            
+            // Actualizar caché
+            moodCache.append(moodViewState.mood, newEntries, moodViewState.offset);
+            
+            // Mostrar las nuevas entradas
+            await loadMoreMoodEntries();
+        } else {
+            moodViewState.hasMore = false;
+        }
+    } catch (error) {
+        console.error('Error cargando más entradas:', error);
+    } finally {
+        moodViewState.isLoading = false;
+        if (indicator) indicator.style.display = 'none';
+    }
 }
 
 // Setup infinite scroll para vista de mood
@@ -760,16 +1075,9 @@ function setupMoodInfiniteScroll() {
         const scrollHeight = modalBody.scrollHeight;
         const clientHeight = modalBody.clientHeight;
         
-        // Si está cerca del final (200px antes), cargar más
-        if (scrollHeight - scrollTop - clientHeight < 200) {
-            const indicator = document.getElementById('moodLoadingIndicator');
-            if (moodViewState.displayedCount < moodViewState.allEntries.length) {
-                if (indicator) indicator.style.display = 'block';
-                loadMoreMoodEntries();
-                setTimeout(() => {
-                    if (indicator) indicator.style.display = 'none';
-                }, 300);
-            }
+        // Si está cerca del final (300px antes), cargar más
+        if (scrollHeight - scrollTop - clientHeight < 300) {
+            loadMoreMoodEntries();
         }
     };
     
@@ -777,10 +1085,179 @@ function setupMoodInfiniteScroll() {
 }
 
 // Ver entrada pública (del feed) o privada (por enlace directo)
-async function viewPublicEntry(entryId) {
+// ============================================
+// CACHÉ DE ENTRADAS ABIERTAS
+// ============================================
+const entryCache = new Map(); // Map<entryId, {entry, isFavorite, timestamp}>
+const entryCacheExpiry = 5 * 60 * 1000; // 5 minutos
+
+// Ver entrada pública (del feed) o privada (por enlace directo) - OPTIMIZADO
+async function viewPublicEntry(entryId, entryData = null) {
     if (!window.supabaseClient) return;
     
-    // Mapa de traducción de moods (con tildes)
+    const entryDetails = document.getElementById('entryDetails');
+    const entryModal = document.getElementById('entryModal');
+    
+    // PASO 1: MOSTRAR MODAL INMEDIATAMENTE con skeleton o datos cacheados
+    entryModal.classList.add('active');
+    
+    // Verificar si tenemos datos en caché
+    const cached = entryCache.get(entryId);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp < entryCacheExpiry)) {
+        // Renderizar desde caché INSTANTÁNEAMENTE
+        console.log('⚡ Renderizando desde caché');
+        renderEntryContent(cached.entry, cached.isFavorite, cached.favoriteCount || 0, entryDetails);
+        
+        // Cargar conteo de comentarios en background
+        getCommentCount(entryId).then(commentCount => {
+            updateCommentCountBadge(entryId, commentCount);
+        });
+        
+        return;
+    }
+    
+    // PASO 2: Si tenemos datos optimistas (desde el listado), renderizar inmediatamente
+    if (entryData) {
+        console.log('⚡ Renderizando optimísticamente');
+        entryDetails.innerHTML = renderEntrySkeleton();
+        
+        // Renderizar con datos que ya tenemos
+        setTimeout(() => renderEntryContent(entryData, false, 0, entryDetails), 50);
+        
+        // Cargar favorito, conteo y comentarios en background (para todos los usuarios, incluso el autor)
+        if (currentUser) {
+            Promise.all([
+                checkFavoriteStatus(entryId),
+                getFavoriteCount(entryId),
+                getCommentCount(entryId)
+            ]).then(([isFav, count, commentCount]) => {
+                renderEntryContent(entryData, isFav, count, entryDetails);
+                updateCommentCountBadge(entryId, commentCount);
+                
+                // ✅ CACHEAR SOLO AQUÍ con valores REALES
+                entryCache.set(entryId, {
+                    entry: entryData,
+                    isFavorite: isFav,
+                    favoriteCount: count,
+                    timestamp: Date.now()
+                });
+            });
+        } else {
+            // Sin sesión, solo cargar conteo de favoritos y comentarios
+            Promise.all([
+                getFavoriteCount(entryId),
+                getCommentCount(entryId)
+            ]).then(([count, commentCount]) => {
+                renderEntryContent(entryData, false, count, entryDetails);
+                updateCommentCountBadge(entryId, commentCount);
+                
+                // ✅ CACHEAR SOLO AQUÍ con valores REALES
+                entryCache.set(entryId, {
+                    entry: entryData,
+                    isFavorite: false,
+                    favoriteCount: count,
+                    timestamp: Date.now()
+                });
+            });
+        }
+        
+        // ❌ NO CACHEAR AQUÍ - Los valores son temporales
+        
+        return;
+    }
+    
+    // PASO 3: Si no hay caché ni datos optimistas, mostrar skeleton
+    entryDetails.innerHTML = renderEntrySkeleton();
+    
+    // PASO 4: Cargar desde BD en background
+    try {
+        const [entryResult, favoriteResult, countResult, commentCountResult] = await Promise.all([
+            window.supabaseClient
+                .from('entries')
+                .select('*')
+                .eq('id', entryId)
+                .single(),
+            currentUser ? window.supabaseClient
+                .from('favorites')
+                .select('id')
+                .eq('user_id', currentUser.id)
+                .eq('entry_id', entryId)
+                .single() : Promise.resolve({ data: null }),
+            getFavoriteCount(entryId),
+            getCommentCount(entryId)
+        ]);
+        
+        if (entryResult.error) throw entryResult.error;
+        
+        const entry = entryResult.data;
+        const isFavorite = !!favoriteResult.data;
+        const favoriteCount = countResult;
+        const commentCount = commentCountResult;
+        
+        // Cachear
+        entryCache.set(entryId, {
+            entry,
+            isFavorite,
+            favoriteCount,
+            timestamp: now
+        });
+        
+        // Renderizar contenido real
+        renderEntryContent(entry, isFavorite, favoriteCount, entryDetails);
+        
+        // Actualizar badge de comentarios
+        updateCommentCountBadge(entryId, commentCount);
+        
+    } catch (error) {
+        console.error('Error cargando entrada:', error);
+        showToast('Error al cargar la entrada', 'error');
+        entryModal.classList.remove('active');
+    }
+}
+
+// Verificar solo el estado de favorito (optimización)
+async function checkFavoriteStatus(entryId) {
+    if (!currentUser || !window.supabaseClient) return false;
+    
+    try {
+        const { data } = await window.supabaseClient
+            .from('favorites')
+            .select('id')
+            .eq('user_id', currentUser.id)
+            .eq('entry_id', entryId)
+            .single();
+        
+        return !!data;
+    } catch {
+        return false;
+    }
+}
+
+// Renderizar skeleton mientras carga
+function renderEntrySkeleton() {
+    return `
+        <div class="entry-view">
+            <button class="entry-close-btn" onclick="closeEntry()" aria-label="Cerrar">×</button>
+            <div class="entry-image-container" style="background: rgba(255,255,255,0.05); min-height: 300px; display: flex; align-items: center; justify-content: center;">
+                <div class="spinner" style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            </div>
+            <div class="entry-right-side">
+                <div class="entry-content-container">
+                    <div style="background: rgba(255,255,255,0.05); height: 20px; width: 150px; border-radius: 4px; margin-bottom: 1rem;"></div>
+                    <div style="background: rgba(255,255,255,0.05); height: 16px; width: 100px; border-radius: 4px; margin-bottom: 1rem;"></div>
+                    <div style="background: rgba(255,255,255,0.05); height: 24px; width: 80%; border-radius: 4px; margin-bottom: 1rem;"></div>
+                    <div style="background: rgba(255,255,255,0.05); height: 200px; width: 100%; border-radius: 4px;"></div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Renderizar contenido de la entrada (separado para reutilización)
+function renderEntryContent(entry, isFavorite, favoriteCount, container) {
+    // Mapa de traducción de moods
     const moodLabels = {
         'reflexivo': 'Reflexivo',
         'poderoso': 'Poderoso',
@@ -792,104 +1269,108 @@ async function viewPublicEntry(entryId) {
         'melancolico': 'Melancólico'
     };
     
-    try {
-        const { data, error} = await window.supabaseClient
-            .from('entries')
-            .select('*')
-            .eq('id', entryId)
-            .single();
-        
-        if (error) throw error;
-        
-        const entry = data;
-        
-        // Verificar si es entrada privada y el usuario no es el dueño
-        const isOwnEntry = currentUser && entry.user_id === currentUser.id;
-        const isPrivate = !entry.is_public;
-        
-        // Permitir acceso si:
-        // 1. Es pública (is_public = true)
-        // 2. Es del usuario actual (isOwnEntry = true)
-        // 3. Se accede mediante enlace directo (siempre permitir, ya que el hash es la forma de compartir)
-        
-        const entryDetails = document.getElementById('entryDetails');
-        
-        // Verificar si ya está en favoritos
-        let isFavorite = false;
-        if (currentUser && !isOwnEntry) {
-            const { data: favData } = await window.supabaseClient
-                .from('favorites')
-                .select('id')
-                .eq('user_id', currentUser.id)
-                .eq('entry_id', entryId)
-                .single();
-            isFavorite = !!favData;
-        }
-        
-        const entryHTML = `
-            <div class="entry-view">
-                <button class="entry-close-btn" onclick="closeEntry()" aria-label="Cerrar">×</button>
-                <div class="entry-image-container">
-                    ${entry.image ? `<img src="${entry.image.url}" alt="${entry.image.alt}" class="entry-image">` : ''}
-                </div>
-                <div class="entry-right-side">
-                    <div class="entry-content-container">
-                        <div class="entry-meta">
-                            <div class="entry-date">${formatDate(entry.date)}</div>
-                            <div class="entry-mood-display">
-                                ${getMoodIcon(entry.mood)}
-                                <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${moodLabels[entry.mood] || entry.mood}</span>
-                            </div>
+    const isOwnEntry = currentUser && entry.user_id === currentUser.id;
+    const isPrivate = !entry.is_public;
+    const hasNavigationStack = window.echoNavigationStack && window.echoNavigationStack.length > 0;
+    
+    const entryHTML = `
+        <div class="entry-view">
+            <button class="entry-close-btn" onclick="closeEntry()" aria-label="Cerrar">×</button>
+            <div class="entry-image-container">
+                ${hasNavigationStack ? `
+                    <button class="entry-back-btn" onclick="goBackToEntry()" title="Volver a entrada anterior">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        </svg>
+                        Volver
+                    </button>
+                ` : ''}
+                ${entry.image ? `<img src="${entry.image.url}" alt="${entry.image.alt}" class="entry-image">` : ''}
+            </div>
+            <div class="entry-right-side">
+                <div class="entry-content-container">
+                    <div class="entry-meta">
+                        <div class="entry-date">${formatDate(entry.date)}</div>
+                        <div class="entry-mood-display">
+                            ${getMoodIcon(entry.mood)}
+                            <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${moodLabels[entry.mood] || entry.mood}</span>
                         </div>
-                        <div style="color: var(--accent); font-size: 0.9rem; margin-bottom: 1rem;">
-                            Por @${entry.username}
-                            ${isPrivate ? '<span style="margin-left: 0.5rem; opacity: 0.6;">(Entrada privada)</span>' : ''}
-                        </div>
-                        ${entry.title ? `<h3 class="entry-title">${entry.title}</h3>` : ''}
-                        <div class="entry-text">${entry.text}</div>
-                        <div class="entry-stats">
-                            <span>${entry.word_count} palabras</span>
-                            <span>${entry.char_count} caracteres</span>
-                        </div>
-                        ${entry.image && entry.image.photographer !== 'Demo' && entry.image.source !== 'user_bank' ? `
-                            <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
-                                Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>
-                            </div>
-                        ` : ''}
                     </div>
-                    <div class="entry-actions">
-                        <button class="btn-share" onclick="shareEntry('${entry.id}')" title="Compartir">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="18" cy="5" r="3"></circle>
-                                <circle cx="6" cy="12" r="3"></circle>
-                                <circle cx="18" cy="19" r="3"></circle>
-                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    <div style="color: var(--accent); font-size: 0.9rem; margin-bottom: 1rem;">
+                        Por @${entry.username}
+                        ${isPrivate ? '<span style="margin-left: 0.5rem; opacity: 0.6;">(Entrada privada)</span>' : ''}
+                    </div>
+                    ${entry.title ? `<h3 class="entry-title">${entry.title}</h3>` : ''}
+                    <div class="entry-text">${entry.text}</div>
+                    <div class="entry-stats">
+                        <span>${entry.word_count} palabras</span>
+                        <span>${entry.char_count} caracteres</span>
+                        ${favoriteCount > 0 ? `<span id="entryFavoriteCount" style="color: var(--accent); display: flex; align-items: center; gap: 0.25rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                             </svg>
-                        </button>
-                        ${!isOwnEntry && currentUser ? `
-                            <button class="btn-favorite ${isFavorite ? 'is-favorite' : ''}" onclick="toggleFavorite('${entry.id}')">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="${isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                                </svg>
-                                ${isFavorite ? 'En Favoritos' : 'Favorito'}
-                            </button>
-                        ` : ''}
-                        ${isOwnEntry ? `
-                            <button class="btn-danger" onclick="deletePublicEntry('${entry.id}')">Eliminar entrada</button>
-                        ` : ''}
+                            ${favoriteCount}
+                        </span>` : ''}
                     </div>
+                    ${entry.image && entry.image.photographer !== 'Demo' && entry.image.source !== 'user_bank' ? `
+                        <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
+                            Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>
+                        </div>
+                    ` : ''}
+                    <div id="echoesSection-${entry.id}" class="echoes-section" style="display: none; padding-top: 1.5rem;">
+                        <div class="echoes-loading" style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5);">Cargando ecos...</div>
+                    </div>
+                </div>
+                <div class="entry-actions">
+                    <button class="btn-share" onclick="shareEntry('${entry.id}')" title="Compartir">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                    </button>
+                    ${!isPrivate ? `
+                        <button class="btn-comment" onclick="openCommentsPanel('${entry.id}')" title="Comentarios">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            <span class="comment-count-badge" id="commentCountBadge-${entry.id}" style="display: none;">0</span>
+                        </button>
+                    ` : ''}
+                    ${currentUser ? `
+                        <button class="btn-favorite ${isFavorite ? 'is-favorite' : ''}" onclick="toggleFavorite('${entry.id}')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="${isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                            </svg>
+                            ${isFavorite ? 'En Favoritos' : 'Favorito'}
+                        </button>
+                    ` : ''}
+                    ${!isPrivate && currentUser && !isOwnEntry ? `
+                        <button class="btn-resonate" onclick="resonateEntry('${entry.id}')" title="Reimaginar con esta imagen">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 1l4 4-4 4"></path>
+                                <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                                <path d="M7 23l-4-4 4-4"></path>
+                                <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                            </svg>
+                            Reimaginar
+                        </button>
+                    ` : ''}
+                    ${isOwnEntry ? `
+                        <button class="btn-danger" onclick="deletePublicEntry('${entry.id}')">Eliminar entrada</button>
+                    ` : ''}
                 </div>
             </div>
-        `;
-        
-        entryDetails.innerHTML = entryHTML;
-        // NO cerrar historyModal - permanece de fondo
-        // document.getElementById('historyModal').classList.remove('active');
-        document.getElementById('entryModal').classList.add('active');
-    } catch (error) {
-        console.error('Error cargando entrada:', error);
-        showToast('Error al cargar la entrada', 'error');
+        </div>
+    `;
+    
+    container.innerHTML = entryHTML;
+    
+    // Cargar ecos en background si es entrada pública
+    if (!isPrivate) {
+        loadEchoesForEntry(entry.id);
     }
 }
 
@@ -911,6 +1392,13 @@ async function deletePublicEntry(publicId) {
         
         showToast('Entrada eliminada del feed', 'success');
         document.getElementById('entryModal').classList.remove('active');
+        
+        // Limpiar cachés
+        entryCache.delete(publicId);
+        if (typeof window.clearMoodCache === 'function') {
+            window.clearMoodCache();
+        }
+        
         renderPublicFeed(); // Recargar feed
     } catch (error) {
         console.error('Error eliminando entrada:', error);
@@ -921,10 +1409,31 @@ async function deletePublicEntry(publicId) {
 // Exportar funciones globales
 window.showConfirm = showConfirm;
 window.viewPublicEntry = viewPublicEntry;
+window.viewPublicEntryOptimistic = viewPublicEntryOptimistic;
 window.deletePublicEntry = deletePublicEntry;
 window.renderPublicFeed = renderPublicFeed;
+window.showMoodEntries = showMoodEntries;
 window.initAuth = initAuth;
 window.logout = logout;
+window.viewEchoEntry = viewEchoEntry;
+window.goBackToEntry = goBackToEntry;
+
+// Exponer utilidad para limpiar caché (útil para debugging o refrescar datos)
+window.clearMoodCache = function(mood = null) {
+    moodCache.clear(mood);
+    console.log(mood ? `🗑️ Caché limpiado para mood: ${mood}` : '🗑️ Todo el caché de moods limpiado');
+};
+
+// Exponer utilidad para limpiar caché de entradas
+window.clearEntryCache = function(entryId = null) {
+    if (entryId) {
+        entryCache.delete(entryId);
+        console.log(`🗑️ Caché limpiado para entrada: ${entryId}`);
+    } else {
+        entryCache.clear();
+        console.log('🗑️ Todo el caché de entradas limpiado');
+    }
+};
 
 // ============================================
 // SISTEMA DE FAVORITOS
@@ -947,6 +1456,12 @@ async function toggleFavorite(entryId) {
             .eq('user_id', currentUser.id)
             .eq('entry_id', entryId)
             .single();
+        
+        const wasFavorite = !!existing;
+        const willBeFavorite = !wasFavorite;
+        
+        // ACTUALIZAR UI INMEDIATAMENTE (optimistic update)
+        updateFavoriteButton(entryId, willBeFavorite);
         
         if (existing) {
             // Quitar de favoritos
@@ -971,12 +1486,113 @@ async function toggleFavorite(entryId) {
             showToast('⭐ Agregado a favoritos', 'success');
         }
         
-        // Recargar la entrada para actualizar el botón
-        viewPublicEntry(entryId);
+        // RECARGAR EL CONTEO REAL DESDE LA BD para asegurar precisión
+        const realCount = await getFavoriteCount(entryId);
+        
+        // ACTUALIZAR CACHÉ DE LA ENTRADA con el nuevo estado de favorito
+        const cached = entryCache.get(entryId);
+        if (cached) {
+            cached.isFavorite = willBeFavorite;
+            cached.favoriteCount = realCount; // Usar conteo real de BD
+            cached.timestamp = Date.now(); // Actualizar timestamp
+            entryCache.set(entryId, cached);
+            console.log(`✅ Caché actualizado: entrada ${entryId} favorito=${willBeFavorite}, count=${realCount}`);
+        }
+        
+        // Actualizar el contador visual con el conteo real
+        updateFavoriteCountDisplay(realCount);
+        
+        // Limpiar caché de favoritos (para que se actualice el conteo en tendencias)
+        favoritesCache.clear();
         
     } catch (error) {
         console.error('Error manejando favorito:', error);
         showToast('Error al actualizar favorito', 'error');
+        
+        // Si hay error, revertir el cambio en la UI
+        const { data: currentState } = await window.supabaseClient
+            .from('favorites')
+            .select('id')
+            .eq('user_id', currentUser.id)
+            .eq('entry_id', entryId)
+            .single();
+        
+        const actualState = !!currentState;
+        updateFavoriteButton(entryId, actualState);
+        
+        // Revertir caché también
+        const cached = entryCache.get(entryId);
+        if (cached) {
+            cached.isFavorite = actualState;
+            entryCache.set(entryId, cached);
+        }
+        updateFavoriteButton(entryId, !!currentState);
+    }
+}
+
+// Actualizar solo el botón de favorito sin recargar la entrada
+function updateFavoriteButton(entryId, isFavorite) {
+    // Buscar el botón de favorito en el modal de entrada
+    const entryModal = document.getElementById('entryModal');
+    if (!entryModal) return;
+    
+    const favoriteBtn = entryModal.querySelector('.btn-favorite');
+    if (!favoriteBtn) return;
+    
+    // Actualizar el estado visual del botón
+    if (isFavorite) {
+        favoriteBtn.classList.add('is-favorite');
+        favoriteBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+            </svg>
+            En Favoritos
+        `;
+    } else {
+        favoriteBtn.classList.remove('is-favorite');
+        favoriteBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+            </svg>
+            Favorito
+        `;
+    }
+}
+
+// Actualizar contador de favoritos visual
+function updateFavoriteCountDisplay(count) {
+    const countElement = document.getElementById('entryFavoriteCount');
+    const statsContainer = document.querySelector('.entry-stats');
+    
+    if (!statsContainer) return;
+    
+    if (count > 0) {
+        // Mostrar o actualizar contador
+        if (countElement) {
+            countElement.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                ${count}
+            `;
+        } else {
+            // Crear elemento si no existe
+            const newCount = document.createElement('span');
+            newCount.id = 'entryFavoriteCount';
+            newCount.style.cssText = 'color: var(--accent); display: flex; align-items: center; gap: 0.25rem;';
+            newCount.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                ${count}
+            `;
+            statsContainer.appendChild(newCount);
+        }
+    } else {
+        // Ocultar contador si es 0
+        if (countElement) {
+            countElement.remove();
+        }
     }
 }
 
@@ -2129,3 +2745,973 @@ document.addEventListener('DOMContentLoaded', () => {
 // Exportar funciones globalmente
 window.openHelpModal = openHelpModal;
 window.closeHelpModal = closeHelpModal;
+
+
+// ============================================
+// SISTEMA DE COMENTARIOS
+// ============================================
+
+// Estado del panel de comentarios
+let currentCommentEntryId = null;
+
+// Abrir panel lateral de comentarios
+async function openCommentsPanel(entryId) {
+    currentCommentEntryId = entryId;
+    
+    const panel = document.getElementById('commentsPanel');
+    const overlay = document.getElementById('commentsPanelOverlay');
+    const footer = document.getElementById('commentsPanelFooter');
+    
+    // Mostrar panel y overlay
+    overlay.classList.add('active');
+    panel.classList.add('active');
+    
+    // Mostrar footer solo si hay usuario logueado
+    if (currentUser) {
+        footer.style.display = 'flex';
+    } else {
+        footer.style.display = 'none';
+    }
+    
+    // Cargar comentarios
+    await loadCommentsInPanel(entryId);
+    
+    // Auto-focus en textarea si el usuario está logueado
+    if (currentUser) {
+        setTimeout(() => {
+            const textarea = document.getElementById('commentsPanelInput');
+            if (textarea) textarea.focus();
+        }, 300);
+    }
+}
+
+// Cerrar panel lateral de comentarios
+function closeCommentsPanel() {
+    const panel = document.getElementById('commentsPanel');
+    const overlay = document.getElementById('commentsPanelOverlay');
+    
+    panel.classList.remove('active');
+    overlay.classList.remove('active');
+    
+    currentCommentEntryId = null;
+    
+    // Limpiar input
+    const textarea = document.getElementById('commentsPanelInput');
+    if (textarea) {
+        textarea.value = '';
+        textarea.style.height = 'auto';
+    }
+}
+
+// Obtener conteo de comentarios de una entrada
+async function getCommentCount(entryId) {
+    if (!window.supabaseClient) return 0;
+    
+    try {
+        const { count, error } = await window.supabaseClient
+            .from('comments')
+            .select('*', { count: 'exact', head: true })
+            .eq('entry_id', entryId);
+        
+        if (error) throw error;
+        return count || 0;
+    } catch (error) {
+        console.error('Error contando comentarios:', error);
+        return 0;
+    }
+}
+
+// Toggle mostrar/ocultar sección de comentarios (DEPRECATED - usar panel)
+async function toggleComments(entryId) {
+    const commentsSection = document.getElementById(`commentsSection-${entryId}`);
+    if (!commentsSection) return;
+    
+    const isVisible = commentsSection.style.display !== 'none';
+    
+    if (isVisible) {
+        // Ocultar
+        commentsSection.style.display = 'none';
+    } else {
+        // Mostrar y cargar comentarios
+        commentsSection.style.display = 'block';
+        await loadComments(entryId);
+        
+        // Auto-focus en textarea si el usuario está logueado
+        if (currentUser) {
+            const textarea = document.getElementById(`commentInput-${entryId}`);
+            if (textarea) {
+                textarea.focus();
+            }
+        }
+    }
+}
+
+// Cargar comentarios en el panel lateral
+async function loadCommentsInPanel(entryId) {
+    if (!window.supabaseClient) return;
+    
+    const container = document.getElementById('commentsPanelBody');
+    if (!container) return;
+    
+    try {
+        // Mostrar loading
+        container.innerHTML = '<div class="comments-loading">Cargando comentarios...</div>';
+        
+        // Cargar comentarios (sin JOIN, para evitar problemas de RLS)
+        const { data: comments, error } = await window.supabaseClient
+            .from('comments')
+            .select('id, content, created_at, user_id')
+            .eq('entry_id', entryId)
+            .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        
+        // Actualizar contador del badge
+        updateCommentCountBadge(entryId, comments?.length || 0);
+        
+        if (!comments || comments.length === 0) {
+            container.innerHTML = '<div class="comments-empty">No hay comentarios aún<br>¡Sé el primero en comentar!</div>';
+            return;
+        }
+        
+        // Obtener usernames de los comentarios
+        const userIds = [...new Set(comments.map(c => c.user_id))];
+        const { data: users } = await window.supabaseClient
+            .from('users')
+            .select('id, username, avatar')
+            .in('id', userIds);
+        
+        // Crear mapa de usuarios
+        const userMap = {};
+        (users || []).forEach(user => {
+            userMap[user.id] = user;
+        });
+        
+        // Renderizar comentarios
+        const commentsHTML = comments.map(comment => {
+            const isOwnComment = currentUser && comment.user_id === currentUser.id;
+            const user = userMap[comment.user_id];
+            const username = user?.username || 'Usuario';
+            const avatar = user?.avatar || null;
+            
+            return `
+                <div class="comment-item-panel" data-comment-id="${comment.id}">
+                    <div class="comment-avatar">
+                        ${avatar 
+                            ? `<img src="${avatar}" alt="${username}" class="comment-avatar-img">` 
+                            : `<div class="comment-avatar-placeholder">${username.charAt(0).toUpperCase()}</div>`
+                        }
+                    </div>
+                    <div class="comment-body">
+                        <div class="comment-header">
+                            <span class="comment-username">@${username}</span>
+                            <span class="comment-date">${formatCommentDate(comment.created_at)}</span>
+                        </div>
+                        <div class="comment-content">${escapeHTML(comment.content)}</div>
+                    </div>
+                    ${isOwnComment ? `
+                        <button class="comment-delete-btn-panel" onclick="deleteCommentFromPanel('${comment.id}')" title="Eliminar comentario">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = commentsHTML;
+        
+        // Scroll al final para ver comentarios más recientes
+        setTimeout(() => {
+            container.scrollTop = container.scrollHeight;
+        }, 100);
+        
+    } catch (error) {
+        console.error('Error cargando comentarios:', error);
+        container.innerHTML = '<div class="comments-error">Error al cargar comentarios</div>';
+    }
+}
+
+// Enviar comentario desde el panel
+async function sendCommentFromPanel() {
+    if (!currentUser) {
+        showToast('Inicia sesión para comentar', 'error');
+        return;
+    }
+    
+    if (!currentCommentEntryId) return;
+    
+    if (!window.supabaseClient) return;
+    
+    const textarea = document.getElementById('commentsPanelInput');
+    if (!textarea) return;
+    
+    const content = textarea.value.trim();
+    
+    if (!content) {
+        showToast('Escribe algo para comentar', 'error');
+        return;
+    }
+    
+    if (content.length > 1000) {
+        showToast('Comentario muy largo (máx. 1000 caracteres)', 'error');
+        return;
+    }
+    
+    try {
+        // Insertar comentario
+        const { data, error } = await window.supabaseClient
+            .from('comments')
+            .insert([{
+                entry_id: currentCommentEntryId,
+                user_id: currentUser.id,
+                content: content
+            }])
+            .select();
+        
+        if (error) throw error;
+        
+        // Limpiar textarea
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        
+        // Recargar comentarios
+        await loadCommentsInPanel(currentCommentEntryId);
+        
+        showToast('Comentario publicado', 'success');
+        
+    } catch (error) {
+        console.error('Error enviando comentario:', error);
+        showToast('Error al publicar comentario', 'error');
+    }
+}
+
+// Eliminar comentario desde el panel
+async function deleteCommentFromPanel(commentId) {
+    if (!currentUser) return;
+    
+    const confirmed = await showConfirm('¿Eliminar este comentario?');
+    if (!confirmed) return;
+    
+    if (!window.supabaseClient) return;
+    
+    try {
+        const { error } = await window.supabaseClient
+            .from('comments')
+            .delete()
+            .eq('id', commentId)
+            .eq('user_id', currentUser.id);
+        
+        if (error) throw error;
+        
+        // Recargar comentarios
+        if (currentCommentEntryId) {
+            await loadCommentsInPanel(currentCommentEntryId);
+        }
+        
+        showToast('Comentario eliminado', 'success');
+        
+    } catch (error) {
+        console.error('Error eliminando comentario:', error);
+        showToast('Error al eliminar comentario', 'error');
+    }
+}
+
+// Cargar comentarios de una entrada (OLD INLINE VERSION - mantener por compatibilidad)
+async function loadComments(entryId) {
+    if (!window.supabaseClient) return;
+    
+    const container = document.getElementById(`commentsContainer-${entryId}`);
+    if (!container) return;
+    
+    try {
+        // Mostrar loading
+        container.innerHTML = '<div class="comments-loading">Cargando comentarios...</div>';
+        
+        // Cargar comentarios (sin JOIN, para evitar problemas de RLS)
+        const { data: comments, error } = await window.supabaseClient
+            .from('comments')
+            .select('id, content, created_at, user_id')
+            .eq('entry_id', entryId)
+            .order('created_at', { ascending: true });
+        
+        if (error) throw error;
+        
+        // Actualizar contador del badge
+        updateCommentCountBadge(entryId, comments?.length || 0);
+        
+        if (!comments || comments.length === 0) {
+            container.innerHTML = '<div class="comments-empty">No hay comentarios aún<br>¡Sé el primero en comentar!</div>';
+            return;
+        }
+        
+        // Obtener usernames de los comentarios
+        const userIds = [...new Set(comments.map(c => c.user_id))];
+        const { data: users } = await window.supabaseClient
+            .from('users')
+            .select('id, username, avatar')
+            .in('id', userIds);
+        
+        // Crear mapa de usuarios
+        const userMap = {};
+        (users || []).forEach(user => {
+            userMap[user.id] = user;
+        });
+        
+        // Renderizar comentarios
+        const commentsHTML = comments.map(comment => {
+            const isOwnComment = currentUser && comment.user_id === currentUser.id;
+            const user = userMap[comment.user_id];
+            const username = user?.username || 'Usuario';
+            const avatar = user?.avatar || null;
+            
+            return `
+                <div class="comment-item" data-comment-id="${comment.id}">
+                    <div class="comment-avatar">
+                        ${avatar 
+                            ? `<img src="${avatar}" alt="${username}" class="comment-avatar-img">` 
+                            : `<div class="comment-avatar-placeholder">${username.charAt(0).toUpperCase()}</div>`
+                        }
+                    </div>
+                    <div class="comment-body">
+                        <div class="comment-header">
+                            <span class="comment-username">@${username}</span>
+                            <span class="comment-date">${formatCommentDate(comment.created_at)}</span>
+                        </div>
+                        <div class="comment-content">${escapeHTML(comment.content)}</div>
+                        ${isOwnComment ? `
+                            <button class="comment-delete-btn" onclick="deleteComment('${comment.id}', '${entryId}')" title="Eliminar comentario">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = commentsHTML;
+        
+        // Scroll al final para ver comentarios más recientes
+        setTimeout(() => {
+            container.scrollTop = container.scrollHeight;
+        }, 100);
+        
+    } catch (error) {
+        console.error('Error cargando comentarios:', error);
+        container.innerHTML = '<div class="comments-error">Error al cargar comentarios</div>';
+    }
+}
+
+// Enviar comentario
+async function sendComment(entryId) {
+    if (!currentUser) {
+        showToast('Inicia sesión para comentar', 'error');
+        return;
+    }
+    
+    if (!window.supabaseClient) return;
+    
+    const textarea = document.getElementById(`commentInput-${entryId}`);
+    if (!textarea) return;
+    
+    const content = textarea.value.trim();
+    
+    if (!content) {
+        showToast('Escribe algo para comentar', 'error');
+        return;
+    }
+    
+    if (content.length > 1000) {
+        showToast('Comentario muy largo (máx. 1000 caracteres)', 'error');
+        return;
+    }
+    
+    try {
+        // DEBUG: Verificar currentUser
+        console.log('📝 Enviando comentario:', {
+            entryId,
+            userId: currentUser.id,
+            username: currentUser.username,
+            contentLength: content.length
+        });
+        
+        // Insertar comentario
+        const { data, error } = await window.supabaseClient
+            .from('comments')
+            .insert([{
+                entry_id: entryId,
+                user_id: currentUser.id,
+                content: content
+            }])
+            .select();
+        
+        if (error) {
+            console.error('❌ Error detallado:', error);
+            throw error;
+        }
+        
+        console.log('✅ Comentario insertado:', data);
+        
+        // Limpiar textarea
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        
+        // Recargar comentarios
+        await loadComments(entryId);
+        
+        showToast('Comentario publicado', 'success');
+        
+    } catch (error) {
+        console.error('Error enviando comentario:', error);
+        showToast('Error al publicar comentario', 'error');
+    }
+}
+
+// Eliminar comentario
+async function deleteComment(commentId, entryId) {
+    if (!currentUser) return;
+    
+    const confirmed = await showConfirm('¿Eliminar este comentario?');
+    if (!confirmed) return;
+    
+    if (!window.supabaseClient) return;
+    
+    try {
+        const { error } = await window.supabaseClient
+            .from('comments')
+            .delete()
+            .eq('id', commentId)
+            .eq('user_id', currentUser.id); // Solo puede eliminar sus propios comentarios
+        
+        if (error) throw error;
+        
+        // Recargar comentarios
+        await loadComments(entryId);
+        
+        showToast('Comentario eliminado', 'success');
+        
+    } catch (error) {
+        console.error('Error eliminando comentario:', error);
+        showToast('Error al eliminar comentario', 'error');
+    }
+}
+
+// Actualizar badge del contador de comentarios
+function updateCommentCountBadge(entryId, count) {
+    const badge = document.getElementById(`commentCountBadge-${entryId}`);
+    if (!badge) return;
+    
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// Formatear fecha de comentario (relativo)
+function formatCommentDate(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Ahora';
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffHours < 24) return `${diffHours}h`;
+    if (diffDays < 7) return `${diffDays}d`;
+    
+    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+}
+
+// Escapar HTML para prevenir XSS
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// Auto-resize textarea cuando se escribe
+document.addEventListener('DOMContentLoaded', () => {
+    // Delegación de eventos para textareas de comentarios
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('comment-input') || e.target.id === 'commentsPanelInput') {
+            e.target.style.height = 'auto';
+            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+        }
+    });
+    
+    // Enter para enviar (Shift+Enter para nueva línea)
+    document.addEventListener('keydown', (e) => {
+        if (e.target.classList.contains('comment-input') && e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const entryId = e.target.id.replace('commentInput-', '');
+            sendComment(entryId);
+        }
+        
+        // Panel lateral
+        if (e.target.id === 'commentsPanelInput' && e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendCommentFromPanel();
+        }
+    });
+});
+
+
+// ============================================
+// SISTEMA DE RESONANCIA (FORK DE ENTRADAS)
+// ============================================
+
+// Variable global para guardar la imagen a resonar
+window.resonanceImage = null;
+window.resonanceOriginalId = null;
+
+// Resonar con una entrada (convertir modal en editor)
+async function resonateEntry(entryId) {
+    if (!currentUser) {
+        showToast('Inicia sesión para resonar', 'error');
+        return;
+    }
+    
+    if (!window.supabaseClient) return;
+    
+    try {
+        // Obtener la entrada original
+        const { data: entry, error } = await window.supabaseClient
+            .from('entries')
+            .select('image, id, username')
+            .eq('id', entryId)
+            .single();
+        
+        if (error) throw error;
+        
+        if (!entry || !entry.image) {
+            showToast('No se puede resonar esta entrada', 'error');
+            return;
+        }
+        
+        // Guardar datos para usar al guardar
+        window.resonanceImage = entry.image;
+        window.resonanceOriginalId = entry.id;
+        
+        // Convertir el modal en un editor
+        const entryDetails = document.getElementById('entryDetails');
+        
+        const editorHTML = `
+            <div class="entry-view entry-editor-view">
+                <button class="entry-close-btn" onclick="closeEntry()" aria-label="Cerrar">×</button>
+                <div class="entry-image-container">
+                    <img src="${entry.image.url}" alt="${entry.image.alt || ''}" class="entry-image">
+                </div>
+                <div class="entry-right-side">
+                    <div class="entry-content-container">
+                        <div style="margin-bottom: 1.5rem; font-size: 0.9rem; color: rgba(255, 255, 255, 0.6);">
+                            Reimaginando con <span style="color: var(--accent); font-weight: 600;">@${entry.username}</span>
+                        </div>
+                        
+                        <!-- Selector de mood (igual que el inicio) -->
+                        <div class="mood-selector" id="resonanceMoodSelector">
+                            <p class="mood-label">Selecciona tu mood</p>
+                            <div class="mood-options">
+                                <button class="mood-btn" data-mood="reflexivo" data-tooltip="Reflexivo" onclick="selectResonanceMood('reflexivo')">
+                                    <span class="mood-icon">🤔</span>
+                                </button>
+                                <button class="mood-btn" data-mood="poderoso" data-tooltip="Poderoso" onclick="selectResonanceMood('poderoso')">
+                                    <span class="mood-icon">💪</span>
+                                </button>
+                                <button class="mood-btn" data-mood="nostalgico" data-tooltip="Nostálgico" onclick="selectResonanceMood('nostalgico')">
+                                    <span class="mood-icon">🕰️</span>
+                                </button>
+                                <button class="mood-btn" data-mood="cansado" data-tooltip="Cansado" onclick="selectResonanceMood('cansado')">
+                                    <span class="mood-icon">😴</span>
+                                </button>
+                                <button class="mood-btn" data-mood="inspirado" data-tooltip="Inspirado" onclick="selectResonanceMood('inspirado')">
+                                    <span class="mood-icon">✨</span>
+                                </button>
+                                <button class="mood-btn" data-mood="alegre" data-tooltip="Alegre" onclick="selectResonanceMood('alegre')">
+                                    <span class="mood-icon">😊</span>
+                                </button>
+                                <button class="mood-btn" data-mood="inquieto" data-tooltip="Inquieto" onclick="selectResonanceMood('inquieto')">
+                                    <span class="mood-icon">😰</span>
+                                </button>
+                                <button class="mood-btn" data-mood="melancolico" data-tooltip="Melancólico" onclick="selectResonanceMood('melancolico')">
+                                    <span class="mood-icon">🌧️</span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <input 
+                                type="text" 
+                                id="resonanceTitleInput" 
+                                placeholder="Título (opcional)..."
+                                style="width: 100%; padding: 0.75rem; background: transparent; border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: white; font-size: 1rem;"
+                            >
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <textarea 
+                                id="resonanceTextarea" 
+                                placeholder="Escribe tu historia inspirada en esta imagen..."
+                                style="width: 100%; min-height: 150px; padding: 1rem 0; background: transparent; border: none; border-bottom: 1px solid rgba(255, 255, 255, 0.1); color: white; font-size: 1rem; font-family: inherit; resize: none; overflow: hidden;"
+                            ></textarea>
+                            <div style="margin-top: 0.5rem; font-size: 0.85rem; color: rgba(255, 255, 255, 0.5);">
+                                <span id="resonanceWordCount">0</span> palabras • <span id="resonanceCharCount">0</span> caracteres
+                            </div>
+                        </div>
+                    </div>
+                    <div class="entry-actions">
+                        <button class="btn-secondary" onclick="closeEntry()">Cancelar</button>
+                        <button class="btn-primary" onclick="saveResonanceEntry()" id="saveResonanceBtn">Guardar Eco</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        entryDetails.innerHTML = editorHTML;
+        
+        // Re-inicializar tooltips para los nuevos elementos
+        if (typeof window.tooltipManager !== 'undefined') {
+            window.tooltipManager.attachListeners();
+        }
+        
+        // Auto-focus en textarea
+        const textarea = document.getElementById('resonanceTextarea');
+        if (textarea) {
+            // Auto-resize al escribir (mantiene mínimo 150px)
+            textarea.addEventListener('input', function() {
+                this.style.height = '150px'; // Reset a mínimo
+                if (this.scrollHeight > 150) {
+                    this.style.height = this.scrollHeight + 'px';
+                }
+                
+                // Actualizar contador
+                const text = this.value;
+                const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+                const chars = text.length;
+                
+                document.getElementById('resonanceWordCount').textContent = words;
+                document.getElementById('resonanceCharCount').textContent = chars;
+            });
+            
+            textarea.focus();
+        }
+        
+        showToast(`✨ Reimaginando con @${entry.username}`, 'success');
+        
+    } catch (error) {
+        console.error('Error al resonar:', error);
+        showToast('Error al resonar entrada', 'error');
+    }
+}
+
+// Guardar entrada de resonancia
+async function saveResonanceEntry() {
+    if (!currentUser || !window.resonanceImage || !window.resonanceOriginalId) {
+        showToast('Error: datos de resonancia no encontrados', 'error');
+        return;
+    }
+    
+    const moodBtn = document.querySelector('#resonanceMoodSelector .mood-btn.active');
+    const mood = moodBtn ? moodBtn.dataset.mood : null;
+    const title = document.getElementById('resonanceTitleInput').value.trim();
+    const text = document.getElementById('resonanceTextarea').value.trim();
+    
+    if (!mood) {
+        showToast('Selecciona un mood', 'error');
+        return;
+    }
+    
+    if (!text) {
+        showToast('Escribe tu texto', 'error');
+        return;
+    }
+    
+    const saveBtn = document.getElementById('saveResonanceBtn');
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Guardando...';
+    saveBtn.disabled = true;
+    
+    try {
+        // Preguntar si vincular
+        const shouldLink = await showResonanceDialog();
+        
+        console.log('🎵 Guardando eco:', {
+            shouldLink,
+            originalId: window.resonanceOriginalId,
+            resonance_of: shouldLink ? window.resonanceOriginalId : null
+        });
+        
+        // Crear entrada
+        const entry = {
+            date: window.getLocalISOString(),
+            mood: mood,
+            title: title || null,
+            text: text,
+            image: window.resonanceImage,
+            word_count: text.split(/\s+/).filter(w => w.length > 0).length,
+            char_count: text.length,
+            is_public: shouldLink, // Público si vincula, privado si no
+            user_id: currentUser.id,
+            username: currentUser.username,
+            resonance_of: shouldLink ? window.resonanceOriginalId : null
+        };
+        
+        console.log('📝 Entrada a guardar:', entry);
+        
+        // Guardar en Supabase
+        const { data, error } = await window.supabaseClient
+            .from('entries')
+            .insert([entry])
+            .select();
+        
+        if (error) {
+            console.error('❌ Error de Supabase:', error);
+            throw error;
+        }
+        
+        console.log('✅ Eco guardado en Supabase:', data);
+        
+        // Limpiar datos de resonancia
+        clearResonanceData();
+        
+        // Cerrar modal
+        document.getElementById('entryModal').classList.remove('active');
+        
+        showToast('¡Eco guardado! 🎉', 'success');
+        
+        // Recargar archivo si existe la función
+        if (typeof loadArchiveEntries === 'function') {
+            loadArchiveEntries();
+        }
+        
+    } catch (error) {
+        console.error('Error guardando resonancia:', error);
+        showToast('Error al guardar eco', 'error');
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+    }
+}
+
+// Seleccionar mood en editor de resonancia
+function selectResonanceMood(mood) {
+    const buttons = document.querySelectorAll('#resonanceMoodSelector .mood-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    
+    const selectedBtn = document.querySelector(`#resonanceMoodSelector .mood-btn[data-mood="${mood}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+    }
+}
+
+// Modal de confirmación para vincular como eco
+function showResonanceDialog() {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const messageEl = document.getElementById('confirmMessage');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+        
+        messageEl.textContent = 'Si vinculas como eco, se publicará automáticamente';
+        okBtn.textContent = 'Sí, vincular';
+        cancelBtn.textContent = 'No, guardar';
+        
+        modal.classList.add('active');
+        
+        const handleOk = () => {
+            cleanup();
+            resolve(true); // Vincular
+        };
+        
+        const handleCancel = () => {
+            cleanup();
+            resolve(false); // Independiente
+        };
+        
+        const cleanup = () => {
+            modal.classList.remove('active');
+            messageEl.textContent = ''; // Limpiar texto
+            okBtn.textContent = 'Aceptar'; // Restaurar texto
+            cancelBtn.textContent = 'Cancelar';
+            okBtn.removeEventListener('click', handleOk);
+            cancelBtn.removeEventListener('click', handleCancel);
+        };
+        
+        okBtn.addEventListener('click', handleOk);
+        cancelBtn.addEventListener('click', handleCancel);
+    });
+}
+
+// Verificar si hay resonancia pendiente al guardar entrada
+async function checkResonanceBeforeSave() {
+    if (window.resonanceOriginalId && currentUser) {
+        const shouldLink = await showResonanceDialog();
+        return shouldLink ? window.resonanceOriginalId : null;
+    }
+    return null;
+}
+
+// Limpiar datos de resonancia
+function clearResonanceData() {
+    window.resonanceImage = null;
+    window.resonanceOriginalId = null;
+}
+
+
+// Obtener ecos de una entrada (usuarios que resonaron con ella)
+async function getEchoes(entryId) {
+    if (!window.supabaseClient) return [];
+    
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('entries')
+            .select('id, user_id, username')
+            .eq('resonance_of', entryId)
+            .eq('is_public', true);
+        
+        if (error) throw error;
+        
+        // Obtener avatares de los usuarios
+        if (!data || data.length === 0) return [];
+        
+        const userIds = [...new Set(data.map(e => e.user_id))];
+        const { data: users, error: usersError } = await window.supabaseClient
+            .from('users')
+            .select('id, username, avatar')
+            .in('id', userIds);
+        
+        if (usersError) throw usersError;
+        
+        // Mapear usuarios con sus datos y entry_id
+        const userMap = {};
+        (users || []).forEach(user => {
+            userMap[user.id] = user;
+        });
+        
+        // Retornar lista única de usuarios con su entry_id
+        const uniqueUsers = [];
+        const seenIds = new Set();
+        
+        data.forEach(entry => {
+            if (!seenIds.has(entry.user_id)) {
+                seenIds.add(entry.user_id);
+                const user = userMap[entry.user_id];
+                if (user) {
+                    uniqueUsers.push({
+                        ...user,
+                        entry_id: entry.id // ID de la entrada del eco
+                    });
+                }
+            }
+        });
+        
+        return uniqueUsers;
+        
+    } catch (error) {
+        console.error('Error obteniendo ecos:', error);
+        return [];
+    }
+}
+
+
+// Cargar y renderizar ecos de una entrada
+async function loadEchoesForEntry(entryId) {
+    console.log('🔍 Cargando ecos para entrada:', entryId);
+    
+    const section = document.getElementById(`echoesSection-${entryId}`);
+    if (!section) {
+        console.log('❌ Sección de ecos no encontrada');
+        return;
+    }
+    
+    const echoes = await getEchoes(entryId);
+    
+    console.log('📊 Ecos encontrados:', echoes.length, echoes);
+    
+    if (echoes.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    
+    const echoesHTML = `
+        <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); margin-bottom: 0.75rem;">
+            Ecos (${echoes.length})
+        </div>
+        <div class="echoes-avatars">
+            ${echoes.map(user => {
+                const initial = user.username.charAt(0).toUpperCase();
+                const avatarHTML = user.avatar 
+                    ? `<img src="${user.avatar}" alt="${user.username}" class="echo-avatar" title="@${user.username}">`
+                    : `<div class="echo-avatar-placeholder" title="@${user.username}">${initial}</div>`;
+                
+                return `<div onclick="viewEchoEntry('${user.entry_id}', '${entryId}')" style="cursor: pointer;">${avatarHTML}</div>`;
+            }).join('')}
+        </div>
+    `;
+    
+    section.innerHTML = echoesHTML;
+    section.style.display = 'block';
+}
+
+
+// ============================================
+// NAVEGACIÓN DE ECOS (HISTORIAL)
+// ============================================
+
+// Stack para guardar el historial de navegación de ecos
+window.echoNavigationStack = [];
+
+// Abrir entrada desde un eco (guarda el contexto)
+function viewEchoEntry(echoEntryId, fromEntryId) {
+    // Guardar el estado completo de la entrada actual (HTML snapshot)
+    const entryDetails = document.getElementById('entryDetails');
+    const currentHTML = entryDetails ? entryDetails.innerHTML : null;
+    const scrollPosition = document.querySelector('#entryModal .entry-content-container')?.scrollTop || 0;
+    
+    window.echoNavigationStack.push({
+        entryId: fromEntryId,
+        htmlSnapshot: currentHTML,
+        scrollPosition: scrollPosition
+    });
+    
+    console.log('📥 Guardado estado de entrada:', fromEntryId, 'scroll:', scrollPosition);
+    
+    // Abrir el eco
+    viewPublicEntry(echoEntryId);
+}
+
+// Volver a la entrada anterior
+function goBackToEntry() {
+    if (window.echoNavigationStack.length === 0) return;
+    
+    const previousState = window.echoNavigationStack.pop();
+    console.log('📤 Restaurando estado de entrada:', previousState.entryId);
+    
+    // Restaurar el HTML exacto que tenía
+    const entryDetails = document.getElementById('entryDetails');
+    const entryModal = document.getElementById('entryModal');
+    
+    if (entryDetails && previousState.htmlSnapshot) {
+        entryDetails.innerHTML = previousState.htmlSnapshot;
+        
+        // Restaurar posición de scroll después de un breve delay
+        setTimeout(() => {
+            const contentContainer = document.querySelector('#entryModal .entry-content-container');
+            if (contentContainer && previousState.scrollPosition) {
+                contentContainer.scrollTop = previousState.scrollPosition;
+            }
+        }, 50);
+        
+        // Asegurar que el modal esté abierto
+        if (!entryModal.classList.contains('active')) {
+            entryModal.classList.add('active');
+        }
+    }
+}

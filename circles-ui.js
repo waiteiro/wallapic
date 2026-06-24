@@ -10,6 +10,111 @@ class CirclesUI {
         this.currentChallengeId = null;
         this.currentView = 'list'; // 'list', 'detail', 'create'
         this.countdownInterval = null;
+        
+        // Paginación de Mis Círculos
+        this.myCirclesPage = 0;
+        this.myCirclesPageSize = 12;
+        this.allMyCircles = [];
+        
+        // Paginación de Círculos Públicos (infinite scroll)
+        this.publicCirclesOffset = 0;
+        this.publicCirclesLimit = 12;
+        this.publicCirclesLoading = false;
+        this.publicCirclesHasMore = true;
+        
+        // Círculos fijados (se cargan desde Supabase)
+        this.pinnedCircles = [];
+    }
+    
+    // ========================================
+    // GESTIÓN DE CÍRCULOS FIJADOS
+    // ========================================
+    
+    async loadPinnedCircles() {
+        try {
+            this.pinnedCircles = await circlesManager.getPinnedCircles();
+        } catch (error) {
+            console.error('Error loading pinned circles:', error);
+            this.pinnedCircles = [];
+        }
+    }
+    
+    async togglePinCircle(circleId, event) {
+        event.stopPropagation(); // Evitar que se abra el círculo
+        
+        try {
+            const result = await circlesManager.togglePinCircle(circleId);
+            this.pinnedCircles = result.pinnedCircles;
+            
+            if (result.isPinned) {
+                this.showToast('Círculo fijado', 'success');
+            } else {
+                this.showToast('Círculo desfijado', 'success');
+            }
+            
+            await this.refreshCirclesList();
+        } catch (error) {
+            console.error('Error toggling pin:', error);
+            this.showToast(error.message || 'Error al fijar círculo', 'error');
+        }
+    }
+    
+    async refreshCirclesList() {
+        // Recargar solo la sección de Mis Círculos sin perder el estado
+        const grid = document.getElementById('myCirclesGrid');
+        const loadMoreContainer = document.querySelector('.circles-load-more-container');
+        
+        if (!grid) return;
+        
+        // Obtener círculos actuales (ya están cargados)
+        const visibleCount = (this.myCirclesPage + 1) * this.myCirclesPageSize;
+        const visibleCircles = this.allMyCircles.slice(0, visibleCount);
+        
+        // Ordenar: fijados primero, luego el resto
+        const sortedCircles = [
+            ...visibleCircles.filter(c => this.pinnedCircles.includes(c.id)),
+            ...visibleCircles.filter(c => !this.pinnedCircles.includes(c.id))
+        ];
+        
+        // Verificar ejercicios pendientes para cada círculo visible
+        const circlesWithChallenges = await Promise.all(
+            sortedCircles.map(async circle => {
+                const activeChallenge = await circlesManager.getActiveChallenge(circle.id);
+                let hasPendingChallenge = false;
+                
+                if (activeChallenge && activeChallenge.status === 'active') {
+                    const hasSubmitted = await circlesManager.hasUserSubmittedChallenge(activeChallenge.id);
+                    hasPendingChallenge = !hasSubmitted;
+                }
+                
+                return {
+                    ...circle,
+                    hasPendingChallenge
+                };
+            })
+        );
+        
+        // Re-renderizar grid
+        grid.innerHTML = '';
+        circlesWithChallenges.forEach(circle => {
+            grid.insertAdjacentHTML('beforeend', this.renderCircleCard(circle, 0));
+        });
+        
+        // Actualizar botón "Cargar más"
+        const remaining = this.allMyCircles.length - visibleCount;
+        if (loadMoreContainer) {
+            const btn = loadMoreContainer.querySelector('.circles-load-more-btn');
+            if (remaining > 0 && btn) {
+                btn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                    Cargar más (${Math.min(this.myCirclesPageSize, remaining)} de ${remaining})
+                `;
+            } else if (remaining <= 0) {
+                loadMoreContainer.remove();
+            }
+        }
     }
 
     // ========================================
@@ -50,8 +155,26 @@ class CirclesUI {
         document.getElementById('closeCirclesBtn')?.addEventListener('click', () => this.close());
         document.getElementById('backToCirclesBtn')?.addEventListener('click', () => this.showCirclesList());
         
+        // Modal de escribir entrada
+        document.getElementById('closeCircleWriteEntryBtn')?.addEventListener('click', () => this.closeWriteEntryModal());
+        
+        // Modal de ver entradas de ejercicio
+        document.getElementById('closeChallengeEntriesBtn')?.addEventListener('click', () => this.closeChallengeEntriesModal());
+        
         this.modal?.addEventListener('click', (e) => {
             if (e.target === this.modal) this.close();
+        });
+        
+        // Cerrar modal de escritura al hacer click fuera
+        const writeModal = document.getElementById('circleWriteEntryModal');
+        writeModal?.addEventListener('click', (e) => {
+            if (e.target === writeModal) this.closeWriteEntryModal();
+        });
+        
+        // Cerrar modal de entradas al hacer click fuera
+        const entriesModal = document.getElementById('challengeEntriesModal');
+        entriesModal?.addEventListener('click', (e) => {
+            if (e.target === entriesModal) this.closeChallengeEntriesModal();
         });
     }
 
@@ -77,13 +200,32 @@ class CirclesUI {
                 circlesManager.init(window.currentUser.id, window.currentUser.username);
             }
 
-            const count = await circlesManager.getPendingInvitationsCount();
+            // Contar invitaciones pendientes + solicitudes de unión pendientes + ejercicios pendientes
+            const [invitationsCount, joinRequestsCount, circles] = await Promise.all([
+                circlesManager.getPendingInvitationsCount(),
+                circlesManager.getPendingJoinRequestsCount(),
+                circlesManager.getMyCircles()
+            ]);
+            
+            // Contar ejercicios pendientes (sin completar)
+            let pendingChallengesCount = 0;
+            for (const circle of circles) {
+                const activeChallenge = await circlesManager.getActiveChallenge(circle.id);
+                if (activeChallenge && activeChallenge.status === 'active') {
+                    const hasSubmitted = await circlesManager.hasUserSubmittedChallenge(activeChallenge.id);
+                    if (!hasSubmitted) {
+                        pendingChallengesCount++;
+                    }
+                }
+            }
+            
+            const totalCount = invitationsCount + joinRequestsCount + pendingChallengesCount;
             const badge = document.getElementById('circlesNotificationBadge');
             
             if (!badge) return;
 
-            if (count > 0) {
-                badge.textContent = count > 9 ? '9+' : count;
+            if (totalCount > 0) {
+                badge.textContent = totalCount > 9 ? '9+' : totalCount;
                 badge.style.display = 'flex';
             } else {
                 badge.style.display = 'none';
@@ -157,12 +299,56 @@ class CirclesUI {
         content.innerHTML = '<div class="circles-loading"><div class="circles-loading-spinner"></div><p>Cargando círculos...</p></div>';
 
         try {
+            // Reiniciar paginación
+            this.myCirclesPage = 0;
+            this.publicCirclesOffset = 0;
+            this.publicCirclesHasMore = true;
+            
             const [circles, invitations] = await Promise.all([
                 circlesManager.getMyCircles(),
-                circlesManager.getMyInvitations()
+                circlesManager.getMyInvitations(),
+                this.loadPinnedCircles() // Cargar círculos fijados desde Supabase
             ]);
 
+            // Guardar todos los círculos
+            this.allMyCircles = circles;
+
+            // Obtener solicitudes de unión para círculos donde soy admin
+            const adminCircles = circles.filter(c => c.myRole === 'admin');
+            let allJoinRequests = [];
+            let joinRequestsByCircle = {}; // Mapa de circleId -> requests[]
+            
+            if (adminCircles.length > 0) {
+                const joinRequestsPromises = adminCircles.map(c => 
+                    circlesManager.getPendingJoinRequests(c.id)
+                );
+                const joinRequestsArrays = await Promise.all(joinRequestsPromises);
+                
+                // Agrupar solicitudes por círculo
+                adminCircles.forEach((circle, index) => {
+                    const requests = joinRequestsArrays[index] || [];
+                    if (requests.length > 0) {
+                        joinRequestsByCircle[circle.id] = requests;
+                    }
+                    allJoinRequests.push(...requests);
+                });
+            }
+
             let html = '';
+
+            // Solicitudes de unión pendientes (para admins)
+            if (allJoinRequests.length > 0) {
+                html += '<div class="circles-section">';
+                html += '<h3 class="circles-section-title">👥 Solicitudes de Unión</h3>';
+                html += '<div class="circles-invitations">';
+                allJoinRequests.forEach(request => {
+                    const circle = circles.find(c => c.id === request.circle_id);
+                    if (circle) {
+                        html += this.renderJoinRequestCard(request, circle);
+                    }
+                });
+                html += '</div></div>';
+            }
 
             // Invitaciones pendientes
             if (invitations.length > 0) {
@@ -175,7 +361,7 @@ class CirclesUI {
                 html += '</div></div>';
             }
 
-            // Mis círculos
+            // Mis círculos (con paginación)
             html += '<div class="circles-section">';
             html += '<div class="circles-section-header">';
             html += '<h3 class="circles-section-title">Mis Círculos</h3>';
@@ -194,19 +380,174 @@ class CirclesUI {
                 html += '<p class="circles-empty-subtitle">Crea tu primer círculo para conectar con amigos</p>';
                 html += '</div>';
             } else {
-                html += '<div class="circles-grid">';
-                circles.forEach(circle => {
-                    html += this.renderCircleCard(circle);
+                // Ordenar círculos: fijados primero, luego el resto
+                const sortedCircles = [
+                    ...circles.filter(c => this.pinnedCircles.includes(c.id)),
+                    ...circles.filter(c => !this.pinnedCircles.includes(c.id))
+                ];
+                
+                // Verificar ejercicios pendientes para cada círculo
+                const circlesWithChallenges = await Promise.all(
+                    sortedCircles.slice(0, this.myCirclesPageSize).map(async circle => {
+                        const activeChallenge = await circlesManager.getActiveChallenge(circle.id);
+                        let hasPendingChallenge = false;
+                        
+                        if (activeChallenge && activeChallenge.status === 'active') {
+                            const hasSubmitted = await circlesManager.hasUserSubmittedChallenge(activeChallenge.id);
+                            hasPendingChallenge = !hasSubmitted;
+                        }
+                        
+                        return {
+                            ...circle,
+                            hasPendingChallenge
+                        };
+                    })
+                );
+                
+                html += '<div class="circles-grid" id="myCirclesGrid">';
+                circlesWithChallenges.forEach(circle => {
+                    const pendingCount = joinRequestsByCircle[circle.id]?.length || 0;
+                    html += this.renderCircleCard(circle, pendingCount);
                 });
                 html += '</div>';
+                
+                // Botón "Cargar más" si hay más círculos
+                if (circles.length > this.myCirclesPageSize) {
+                    html += '<div class="circles-load-more-container">';
+                    html += '<button class="circles-load-more-btn" onclick="circlesUI.loadMoreMyCircles()">';
+                    html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">';
+                    html += '<polyline points="6 9 12 15 18 9"></polyline>';
+                    html += '</svg>';
+                    html += `Cargar más (${Math.min(this.myCirclesPageSize, circles.length - this.myCirclesPageSize)} de ${circles.length - this.myCirclesPageSize})`;
+                    html += '</button>';
+                    html += '</div>';
+                }
             }
             html += '</div>';
 
+            // Círculos Públicos (colapsable con infinite scroll)
+            html += await this.renderPublicCirclesSection(joinRequestsByCircle);
+
             content.innerHTML = html;
+            
+            // Configurar infinite scroll para círculos públicos
+            this.setupPublicCirclesInfiniteScroll();
+            
         } catch (error) {
             console.error('Error loading circles:', error);
             content.innerHTML = '<div class="circles-empty"><p class="circles-empty-title">Error al cargar círculos</p></div>';
         }
+    }
+
+    renderJoinRequestCard(request, circle) {
+        const avatarColor = this.getAvatarColor(request.username);
+        return `
+            <div class="circles-invitation-card">
+                <div class="circles-invitation-avatar" style="background: ${avatarColor}">
+                    <span>${request.username.charAt(0).toUpperCase()}</span>
+                </div>
+                <div class="circles-invitation-info">
+                    <h4 class="circles-invitation-name">@${request.username}</h4>
+                    <p class="circles-invitation-from">Quiere unirse a <strong>${circle.name}</strong></p>
+                    <p class="circles-invitation-desc" style="font-size: 0.8rem; color: var(--circles-text-secondary);">
+                        ${circle.members?.length || 0}/${circle.max_members} miembros
+                    </p>
+                </div>
+                <div class="circles-invitation-actions">
+                    <button class="circles-btn circles-btn-primary circles-btn-sm" onclick="circlesUI.acceptJoinRequest('${request.id}')">Aceptar</button>
+                    <button class="circles-btn circles-btn-secondary circles-btn-sm" onclick="circlesUI.rejectJoinRequest('${request.id}')">Rechazar</button>
+                </div>
+            </div>
+        `;
+    }
+
+    async acceptJoinRequest(requestId) {
+        try {
+            await circlesManager.respondToJoinRequest(requestId, true);
+            this.showToast('✅ Usuario agregado al círculo!', 'success');
+            
+            // Si estamos en la vista de detalle del círculo, recargar el detalle
+            if (this.currentView === 'detail' && this.currentCircleId) {
+                await this.showCircleDetail(this.currentCircleId);
+            } else {
+                await this.showCirclesList();
+            }
+            
+            this.updateNotificationBadge();
+        } catch (error) {
+            console.error('Error accepting join request:', error);
+            this.showToast(error.message || 'Error al aceptar solicitud', 'error');
+        }
+    }
+
+    async rejectJoinRequest(requestId) {
+        try {
+            await circlesManager.respondToJoinRequest(requestId, false);
+            this.showToast('Solicitud rechazada', 'success');
+            
+            // Si estamos en la vista de detalle del círculo, recargar el detalle
+            if (this.currentView === 'detail' && this.currentCircleId) {
+                await this.showCircleDetail(this.currentCircleId);
+            } else {
+                await this.showCirclesList();
+            }
+            
+            this.updateNotificationBadge();
+        } catch (error) {
+            console.error('Error rejecting join request:', error);
+            this.showToast('Error al rechazar solicitud', 'error');
+        }
+    }
+
+    renderJoinRequestsSection(requests) {
+        let html = '<div class="circles-join-requests-section">';
+        html += '<h3 class="circles-section-title">👥 Solicitudes Pendientes</h3>';
+        html += '<div class="circles-join-requests-list">';
+        
+        requests.forEach(request => {
+            const avatarColor = this.getAvatarColor(request.username);
+            html += `
+                <div class="circles-join-request-card">
+                    <div class="circles-request-avatar" style="background: ${avatarColor}">
+                        <span>${request.username.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div class="circles-request-info">
+                        <h4 class="circles-request-username">@${request.username}</h4>
+                        <p class="circles-request-date">${this.formatTimeAgo(request.created_at)}</p>
+                    </div>
+                    <div class="circles-request-actions">
+                        <button class="circles-btn circles-btn-primary circles-btn-sm" onclick="circlesUI.acceptJoinRequest('${request.id}')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Aceptar
+                        </button>
+                        <button class="circles-btn circles-btn-secondary circles-btn-sm" onclick="circlesUI.rejectJoinRequest('${request.id}')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                            Rechazar
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div></div>';
+        return html;
+    }
+
+    formatTimeAgo(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now - date) / 1000);
+
+        if (seconds < 60) return 'Hace un momento';
+        if (seconds < 3600) return `Hace ${Math.floor(seconds / 60)} min`;
+        if (seconds < 86400) return `Hace ${Math.floor(seconds / 3600)} h`;
+        if (seconds < 604800) return `Hace ${Math.floor(seconds / 86400)} días`;
+        return date.toLocaleDateString();
     }
 
     renderInvitationCard(invitation) {
@@ -229,22 +570,342 @@ class CirclesUI {
         `;
     }
 
-    renderCircleCard(circle) {
+    renderCircleCard(circle, pendingRequestsCount = 0) {
         const isAdmin = circle.myRole === 'admin';
+        const hasPendingRequests = isAdmin && pendingRequestsCount > 0;
+        const memberCount = circle.memberCount || 0;
+        const isPinned = this.pinnedCircles.includes(circle.id);
+        const hasPendingChallenge = circle.hasPendingChallenge || false;
+        
         return `
-            <div class="circles-card" onclick="circlesUI.showCircleDetail('${circle.id}')">
+            <div class="circles-card ${isPinned ? 'circles-card-pinned' : ''}" onclick="circlesUI.showCircleDetail('${circle.id}')">
                 <div class="circles-card-header" style="background: ${circle.cover_color}">
                     <h3 class="circles-card-name">${circle.name}</h3>
-                    ${isAdmin ? '<span class="circles-admin-badge">Admin</span>' : ''}
+                    <div class="circles-card-badges">
+                        ${isAdmin ? '<span class="circles-admin-badge">Admin</span>' : ''}
+                        ${hasPendingChallenge ? '<span class="circles-challenge-indicator">📝</span>' : ''}
+                        <button class="circles-pin-btn ${isPinned ? 'circles-pinned' : ''}" 
+                                onclick="circlesUI.togglePinCircle('${circle.id}', event)"
+                                title="${isPinned ? 'Desfijar círculo' : 'Fijar círculo'}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="${isPinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                                <path d="M12 17v5"></path>
+                                <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="circles-card-body">
                     ${circle.description ? `<p class="circles-card-description">${circle.description}</p>` : ''}
                     <div class="circles-card-footer">
-                        <span class="circles-members-count">${circle.members?.length || 0}/${circle.max_members} miembros</span>
+                        <span class="circles-members-count">${memberCount}/${circle.max_members} miembros</span>
+                        ${hasPendingRequests ? `<span class="circles-pending-indicator">👥 ${pendingRequestsCount} ${pendingRequestsCount === 1 ? 'solicitud' : 'solicitudes'}</span>` : ''}
                     </div>
                 </div>
             </div>
         `;
+    }
+
+    // ========================================
+    // CÍRCULOS PÚBLICOS (COLAPSABLE)
+    // ========================================
+
+    async loadMoreMyCircles() {
+        const grid = document.getElementById('myCirclesGrid');
+        const loadMoreBtn = document.querySelector('.circles-load-more-btn');
+        
+        if (!grid || !loadMoreBtn) return;
+        
+        this.myCirclesPage++;
+        const start = this.myCirclesPage * this.myCirclesPageSize;
+        const end = start + this.myCirclesPageSize;
+        const nextCircles = this.allMyCircles.slice(start, end);
+        
+        if (nextCircles.length === 0) return;
+        
+        // Agregar nuevas tarjetas (los fijados ya están arriba)
+        nextCircles.forEach(circle => {
+            // Solo agregar si no está fijado (los fijados ya están en el grid)
+            if (!this.pinnedCircles.includes(circle.id)) {
+                grid.insertAdjacentHTML('beforeend', this.renderCircleCard(circle, 0));
+            }
+        });
+        
+        // Actualizar o remover botón
+        const remaining = this.allMyCircles.length - end;
+        if (remaining > 0) {
+            loadMoreBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+                Cargar más (${Math.min(this.myCirclesPageSize, remaining)} de ${remaining})
+            `;
+        } else {
+            loadMoreBtn.remove();
+        }
+    }
+
+    async renderPublicCirclesSection() {
+        try {
+            const publicCircles = await circlesManager.getPublicCircles(0, this.publicCirclesLimit);
+            
+            if (!publicCircles || publicCircles.length === 0) {
+                return ''; // No mostrar nada si no hay círculos públicos
+            }
+
+            this.publicCirclesOffset = publicCircles.length;
+            this.publicCirclesHasMore = publicCircles.length === this.publicCirclesLimit;
+
+            let html = '<div class="circles-section circles-public-section">';
+            html += '<div class="circles-section-header circles-collapsable-header" onclick="circlesUI.togglePublicCircles()">';
+            html += '<div class="circles-public-title-group">';
+            html += '<h3 class="circles-section-title">🌍 Círculos Públicos</h3>';
+            html += `<span class="circles-public-counter">${publicCircles.length}+</span>`;
+            html += '</div>';
+            html += '<svg class="circles-collapse-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">';
+            html += '<polyline points="6 9 12 15 18 9"></polyline>';
+            html += '</svg>';
+            html += '</div>';
+            
+            html += '<div class="circles-public-content circles-collapsed">';
+            html += '<div class="circles-grid" id="publicCirclesGrid">';
+            
+            for (const circle of publicCircles) {
+                html += await this.renderPublicCircleCard(circle);
+            }
+            
+            html += '</div>';
+            
+            // Loader para infinite scroll
+            if (this.publicCirclesHasMore) {
+                html += '<div class="circles-infinite-loader" id="publicCirclesLoader" style="display: none;">';
+                html += '<div class="circles-loading-spinner"></div>';
+                html += '<p>Cargando más círculos...</p>';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            html += '</div>';
+            
+            return html;
+        } catch (error) {
+            console.error('Error rendering public circles:', error);
+            return '';
+        }
+    }
+
+    setupPublicCirclesInfiniteScroll() {
+        const publicContent = document.querySelector('.circles-public-content');
+        if (!publicContent) return;
+
+        const observer = new IntersectionObserver(
+            async (entries) => {
+                const loader = document.getElementById('publicCirclesLoader');
+                if (!loader || !entries[0].isIntersecting) return;
+                if (this.publicCirclesLoading || !this.publicCirclesHasMore) return;
+
+                await this.loadMorePublicCircles();
+            },
+            { threshold: 0.1, root: document.getElementById('circlesContent') }
+        );
+
+        const loader = document.getElementById('publicCirclesLoader');
+        if (loader) {
+            observer.observe(loader);
+            // Mostrar loader solo cuando la sección está expandida
+            publicContent.addEventListener('transitionend', () => {
+                if (!publicContent.classList.contains('circles-collapsed')) {
+                    loader.style.display = 'block';
+                }
+            });
+        }
+    }
+
+    async loadMorePublicCircles() {
+        if (this.publicCirclesLoading || !this.publicCirclesHasMore) return;
+
+        this.publicCirclesLoading = true;
+        const grid = document.getElementById('publicCirclesGrid');
+        const loader = document.getElementById('publicCirclesLoader');
+
+        if (!grid) {
+            this.publicCirclesLoading = false;
+            return;
+        }
+
+        if (loader) loader.style.display = 'block';
+
+        try {
+            const newCircles = await circlesManager.getPublicCircles(
+                this.publicCirclesOffset,
+                this.publicCirclesLimit
+            );
+
+            if (newCircles.length === 0) {
+                this.publicCirclesHasMore = false;
+                if (loader) loader.style.display = 'none';
+                return;
+            }
+
+            // Agregar nuevas tarjetas
+            for (const circle of newCircles) {
+                const cardHTML = await this.renderPublicCircleCard(circle);
+                grid.insertAdjacentHTML('beforeend', cardHTML);
+            }
+
+            this.publicCirclesOffset += newCircles.length;
+            this.publicCirclesHasMore = newCircles.length === this.publicCirclesLimit;
+
+            // Actualizar contador
+            const counter = document.querySelector('.circles-public-counter');
+            if (counter) {
+                counter.textContent = `${this.publicCirclesOffset}+`;
+            }
+
+            if (!this.publicCirclesHasMore && loader) {
+                loader.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error loading more public circles:', error);
+        } finally {
+            this.publicCirclesLoading = false;
+        }
+    }
+
+    async renderPublicCircleCard(circle) {
+        // Verificar si ya soy miembro
+        let isMember = false;
+        let hasPendingRequest = false;
+
+        if (window.currentUser) {
+            const { data: membership } = await window.supabaseClient
+                .from('circle_members')
+                .select('id')
+                .eq('circle_id', circle.id)
+                .eq('user_id', window.currentUser.id)
+                .single();
+
+            isMember = !!membership;
+
+            if (!isMember) {
+                const { data: request } = await window.supabaseClient
+                    .from('circle_join_requests')
+                    .select('id, status')
+                    .eq('circle_id', circle.id)
+                    .eq('user_id', window.currentUser.id)
+                    .single();
+
+                hasPendingRequest = request && request.status === 'pending';
+            }
+        }
+
+        const memberCount = circle.memberCount || 0;
+        const isFull = memberCount >= circle.max_members;
+
+        let buttonHTML = '';
+        if (isMember) {
+            buttonHTML = `
+                <button class="circles-btn circles-btn-secondary circles-btn-sm" style="cursor: default; opacity: 0.7;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    Ya eres miembro
+                </button>
+            `;
+        } else if (hasPendingRequest) {
+            buttonHTML = `
+                <button class="circles-btn circles-btn-secondary circles-btn-sm" style="cursor: default; opacity: 0.7; border-color: var(--circles-warning);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    Solicitud enviada
+                </button>
+            `;
+        } else if (isFull) {
+            buttonHTML = `
+                <button class="circles-btn circles-btn-secondary circles-btn-sm" style="cursor: not-allowed; opacity: 0.5;" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    Círculo lleno
+                </button>
+            `;
+        } else {
+            buttonHTML = `
+                <button class="circles-btn circles-btn-primary circles-btn-sm" onclick="circlesUI.requestToJoinPublicCircle('${circle.id}', event)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                        <line x1="20" y1="8" x2="20" y2="14"></line>
+                        <line x1="23" y1="11" x2="17" y2="11"></line>
+                    </svg>
+                    Hacer Parte
+                </button>
+            `;
+        }
+
+        return `
+            <div class="circles-card">
+                <div class="circles-card-header circles-card-header-compact" style="background: ${circle.cover_color}">
+                    <h3 class="circles-card-name">${circle.name}</h3>
+                </div>
+                <div class="circles-card-body">
+                    ${circle.description ? `<p class="circles-card-description">${circle.description}</p>` : ''}
+                    <p class="circles-card-creator">Creado por <strong>@${circle.creatorUsername}</strong></p>
+                    <div class="circles-card-footer">
+                        <span class="circles-members-count">${memberCount}/${circle.max_members} miembros</span>
+                    </div>
+                    ${buttonHTML}
+                </div>
+            </div>
+        `;
+    }
+
+    togglePublicCircles() {
+        const content = document.querySelector('.circles-public-content');
+        const icon = document.querySelector('.circles-collapse-icon');
+        
+        if (content && icon) {
+            content.classList.toggle('circles-collapsed');
+            icon.classList.toggle('circles-rotated');
+        }
+    }
+
+    async requestToJoinPublicCircle(circleId, event) {
+        event.stopPropagation(); // Evitar que se dispare el click del card
+        
+        if (!window.currentUser) {
+            this.showToast('Debes iniciar sesión para unirte a un círculo', 'error');
+            return;
+        }
+
+        try {
+            await circlesManager.requestToJoinCircle(circleId);
+            this.showToast('✅ Solicitud enviada! El administrador revisará tu solicitud', 'success');
+            
+            // Recargar la lista para actualizar el estado del botón
+            await this.showCirclesList();
+        } catch (error) {
+            console.error('Error requesting to join circle:', error);
+            
+            let errorMessage = 'Error al enviar solicitud';
+            if (error.message.includes('privado')) {
+                errorMessage = 'Este círculo es privado';
+            } else if (error.message.includes('miembro')) {
+                errorMessage = 'Ya eres miembro de este círculo';
+            } else if (error.message.includes('solicitud')) {
+                errorMessage = error.message;
+            } else if (error.message.includes('lleno')) {
+                errorMessage = 'El círculo está lleno';
+            } else if (error.message.includes('límite')) {
+                errorMessage = error.message;
+            } else {
+                errorMessage = error.message || 'Error al enviar solicitud';
+            }
+            this.showToast(errorMessage, 'error');
+        }
     }
 
     async acceptInvitation(invitationId) {
@@ -292,6 +953,19 @@ class CirclesUI {
             const circle = await circlesManager.getCircleDetails(circleId);
             let activeChallenge = circle.activeChallenge;
 
+            // Obtener TODOS los ejercicios del círculo
+            const allChallenges = await circlesManager.getAllChallenges(circleId);
+
+            // Verificar si soy admin
+            const myMembership = circle.members.find(m => m.userId === window.currentUser?.id);
+            const isAdmin = myMembership?.role === 'admin';
+
+            // Si soy admin, cargar solicitudes pendientes
+            let pendingRequests = [];
+            if (isAdmin) {
+                pendingRequests = await circlesManager.getPendingJoinRequests(circleId);
+            }
+
             // Verificar deadline si hay challenge activo
             if (activeChallenge && activeChallenge.status === 'active') {
                 const wasRevealed = await circlesManager.checkAndRevealEntries(activeChallenge.id, circleId);
@@ -315,11 +989,19 @@ class CirclesUI {
                 </div>
             `;
 
-            // Ejercicio activo o proponer nuevo
-            if (activeChallenge) {
-                html += await this.renderActiveChallenge(activeChallenge, circle);
-            } else {
+            // Solicitudes pendientes (solo para admins)
+            if (isAdmin && pendingRequests.length > 0) {
+                html += this.renderJoinRequestsSection(pendingRequests);
+            }
+
+            // Botón para proponer nuevo ejercicio (solo si no hay uno activo)
+            if (!activeChallenge) {
                 html += this.renderNoChallengeState(circle);
+            }
+
+            // Historial de ejercicios (todos, activos y completados)
+            if (allChallenges.length > 0) {
+                html += await this.renderChallengesHistory(allChallenges, circle, isAdmin);
             }
 
             // Miembros
@@ -445,6 +1127,303 @@ class CirclesUI {
         `;
         html += '</div>';
         return html;
+    }
+
+    async renderChallengesHistory(challenges, circle, isAdmin) {
+        let html = '<div class="circles-challenges-history">';
+        html += '<h3 class="circles-section-title">📚 Ejercicios</h3>';
+        html += '<div class="circles-challenges-grid">';
+        
+        for (const challenge of challenges) {
+            const entries = await circlesManager.getChallengeEntries(challenge.id);
+            const hasSubmitted = await circlesManager.hasUserSubmittedChallenge(challenge.id);
+            const isActive = challenge.status === 'active';
+            const isRevealed = challenge.status === 'revealed' || entries[0]?.is_revealed;
+            
+            const deadline = new Date(challenge.deadline);
+            const now = new Date();
+            const isPast = now > deadline;
+            
+            html += `
+                <div class="circles-challenge-card ${isActive ? 'circles-challenge-active' : ''}" onclick="circlesUI.openChallengeDetail('${challenge.id}')">
+                    <div class="circles-challenge-card-image">
+                        <img src="${challenge.image.thumbnail_url || challenge.image.url}" alt="Ejercicio">
+                        ${isActive && !hasSubmitted ? '<span class="circles-challenge-pending-badge">📝 Pendiente</span>' : ''}
+                        ${isActive && hasSubmitted && !isRevealed ? '<span class="circles-challenge-done-badge">✅ Completado</span>' : ''}
+                    </div>
+                    <div class="circles-challenge-card-body">
+                        <p class="circles-challenge-card-author">Por @${challenge.proposed_by_username}</p>
+                        <p class="circles-challenge-card-date">${this.formatDate(challenge.created_at)}</p>
+                        <p class="circles-challenge-card-stats">${entries.length} ${entries.length === 1 ? 'entrada' : 'entradas'}</p>
+                        ${isAdmin ? `
+                            <button class="circles-btn circles-btn-danger circles-btn-xs" onclick="event.stopPropagation(); circlesUI.deleteChallenge('${challenge.id}')">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += '</div></div>';
+        return html;
+    }
+
+    formatDate(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) return 'Hoy';
+        if (diffDays === 1) return 'Ayer';
+        if (diffDays < 7) return `Hace ${diffDays} días`;
+        
+        return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    }
+
+    async openChallengeDetail(challengeId) {
+        // Abrir modal inmediatamente con loader
+        const modal = document.getElementById('challengeEntriesModal');
+        const content = document.getElementById('challengeEntriesContent');
+        
+        content.innerHTML = `
+            <div class="circles-challenge-entries-view">
+                <div class="circles-sticky-header">
+                    <button class="circles-modal-close-inside" onclick="circlesUI.closeChallengeEntriesModal()" aria-label="Cerrar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="circles-loading">
+                    <div class="circles-loading-spinner"></div>
+                    <p>Cargando ejercicio...</p>
+                </div>
+            </div>
+        `;
+        modal.classList.add('active');
+        
+        // Abrir modal con el detalle del ejercicio
+        this.currentChallengeId = challengeId;
+        
+        try {
+            const { data: challenge, error } = await supabaseClient
+                .from('circle_challenges')
+                .select('*')
+                .eq('id', challengeId)
+                .single();
+            
+            if (error) throw error;
+            
+            const entries = await circlesManager.getChallengeEntries(challengeId);
+            const hasSubmitted = await circlesManager.hasUserSubmittedChallenge(challengeId);
+            const isActive = challenge.status === 'active';
+            const isRevealed = challenge.status === 'revealed' || entries[0]?.is_revealed;
+            
+            // Si es activo y no ha enviado, abrir para escribir
+            if (isActive && !hasSubmitted) {
+                modal.classList.remove('active');
+                this.showWriteEntry();
+                return;
+            }
+            
+            // Mostrar las entradas en un modal
+            this.showChallengeEntriesModal(challenge, entries, isRevealed);
+            
+        } catch (error) {
+            console.error('Error opening challenge:', error);
+            modal.classList.remove('active');
+            this.showToast('Error al abrir ejercicio', 'error');
+        }
+    }
+
+    showChallengeEntriesModal(challenge, entries, isRevealed) {
+        const modal = document.getElementById('challengeEntriesModal');
+        const content = document.getElementById('challengeEntriesContent');
+        
+        // Guardar las entradas para navegación
+        this.currentChallengeEntries = entries;
+        this.currentChallengeImage = challenge.image.url;
+        
+        let html = `
+            <div class="circles-challenge-entries-view">
+                <div class="circles-sticky-header">
+                    <button class="circles-modal-close-inside" onclick="circlesUI.closeChallengeEntriesModal()" aria-label="Cerrar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="circles-challenge-header">
+                    <img src="${challenge.image.url}" alt="Imagen del ejercicio" class="circles-challenge-full-image">
+                    <div class="circles-challenge-header-info">
+                        <h3>Ejercicio propuesto por @${challenge.proposed_by_username}</h3>
+                        <p class="circles-challenge-date">${this.formatDate(challenge.created_at)}</p>
+                        <p class="circles-challenge-stats">${entries.length} ${entries.length === 1 ? 'entrada' : 'entradas'}</p>
+                    </div>
+                </div>
+                
+                <div class="circles-entries-list">
+                    <h4 class="circles-entries-list-title">📝 Entradas</h4>
+        `;
+        
+        if (entries.length === 0) {
+            html += '<p class="circles-empty-subtitle">No hay entradas aún</p>';
+        } else {
+            entries.forEach((entry, index) => {
+                const avatarColor = this.getAvatarColor(entry.username);
+                const isOwn = entry.user_id === window.currentUser?.id;
+                
+                html += `
+                    <div class="circles-entry-card ${isOwn ? 'circles-own-entry' : ''}" onclick="circlesUI.openEntryInModal(${index})">
+                        <div class="circles-entry-card-header">
+                            <div class="circles-entry-avatar" style="background: ${avatarColor}">
+                                ${entry.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div class="circles-entry-card-info">
+                                <h5 class="circles-entry-card-author">@${entry.username} ${isOwn ? '<span class="circles-own-badge">Tú</span>' : ''}</h5>
+                                ${entry.title ? `<p class="circles-entry-card-title">${entry.title}</p>` : ''}
+                            </div>
+                        </div>
+                        <p class="circles-entry-card-preview">${entry.text.substring(0, 150)}${entry.text.length > 150 ? '...' : ''}</p>
+                        <div class="circles-entry-card-footer">
+                            <span>${entry.word_count} palabras</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        html += '</div></div>';
+        
+        content.innerHTML = html;
+        modal.classList.add('active');
+        
+        // Listener para ESC
+        this.challengeEntriesEscListener = (e) => {
+            if (e.key === 'Escape') {
+                this.closeChallengeEntriesModal();
+            }
+        };
+        document.addEventListener('keydown', this.challengeEntriesEscListener);
+    }
+
+    closeChallengeEntriesModal() {
+        const modal = document.getElementById('challengeEntriesModal');
+        modal.classList.remove('active');
+        
+        // Remover listener de ESC
+        if (this.challengeEntriesEscListener) {
+            document.removeEventListener('keydown', this.challengeEntriesEscListener);
+            this.challengeEntriesEscListener = null;
+        }
+    }
+
+    openEntryInModal(entryIndex) {
+        if (!this.currentChallengeEntries || !this.currentChallengeEntries[entryIndex]) return;
+        
+        this.currentEntryIndex = entryIndex;
+        const entry = this.currentChallengeEntries[entryIndex];
+        
+        // Usar el modal de entryModal existente
+        const modal = document.getElementById('entryModal');
+        const content = document.getElementById('entryDetails');
+        
+        const avatarColor = this.getAvatarColor(entry.username);
+        const isOwn = entry.user_id === window.currentUser?.id;
+        
+        const hasPrev = entryIndex > 0;
+        const hasNext = entryIndex < this.currentChallengeEntries.length - 1;
+        
+        const entryHTML = `
+            <div class="entry-view">
+                <!-- Botón cerrar -->
+                <button class="entry-modal-close-btn" onclick="circlesUI.closeEntryModal()" aria-label="Cerrar">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                
+                <!-- Flechas de navegación -->
+                ${hasPrev ? `
+                    <button class="entry-nav-btn entry-nav-prev" onclick="circlesUI.navigateEntry(-1)" aria-label="Entrada anterior">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                ` : ''}
+                
+                ${hasNext ? `
+                    <button class="entry-nav-btn entry-nav-next" onclick="circlesUI.navigateEntry(1)" aria-label="Entrada siguiente">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                ` : ''}
+                
+                <!-- Contador de entradas -->
+                <div class="entry-counter">${entryIndex + 1} / ${this.currentChallengeEntries.length}</div>
+                
+                <div class="entry-image-container">
+                    <img src="${this.currentChallengeImage}" alt="Imagen del ejercicio" class="entry-image">
+                </div>
+                <div class="entry-right-side">
+                    <div class="entry-content-container">
+                        <div class="entry-meta">
+                            <div class="entry-author-info">
+                                <div class="circles-entry-avatar" style="background: ${avatarColor}; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; margin-right: 0.5rem;">
+                                    ${entry.username.charAt(0).toUpperCase()}
+                                </div>
+                                <span style="font-size: 1rem; font-weight: 500;">@${entry.username}</span>
+                                ${isOwn ? '<span class="circles-own-badge" style="margin-left: 0.5rem;">Tú</span>' : ''}
+                            </div>
+                            <div class="entry-date">${this.formatTimeAgo(entry.created_at)}</div>
+                        </div>
+                        ${entry.title ? `<h3 class="entry-title">${entry.title}</h3>` : ''}
+                        <div class="entry-text">${entry.text.replace(/\n/g, '<br>')}</div>
+                        <div class="entry-stats">
+                            <span>${entry.word_count} palabras</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        content.innerHTML = entryHTML;
+        modal.classList.add('active');
+    }
+
+    closeEntryModal() {
+        const modal = document.getElementById('entryModal');
+        modal.classList.remove('active');
+    }
+
+    navigateEntry(direction) {
+        const newIndex = this.currentEntryIndex + direction;
+        if (newIndex >= 0 && newIndex < this.currentChallengeEntries.length) {
+            this.openEntryInModal(newIndex);
+        }
+    }
+
+    async deleteChallenge(challengeId) {
+        if (!confirm('¿Eliminar este ejercicio y todas sus entradas?')) return;
+        
+        try {
+            await circlesManager.deleteChallenge(challengeId);
+            this.showToast('Ejercicio eliminado', 'success');
+            await this.showCircleDetail(this.currentCircleId);
+        } catch (error) {
+            console.error('Error deleting challenge:', error);
+            this.showToast(error.message || 'Error al eliminar ejercicio', 'error');
+        }
     }
 
     async renderRevealedEntries(entries, challengeId) {
@@ -667,47 +1646,93 @@ class CirclesUI {
     }
 
     async showWriteEntry() {
-        const content = document.getElementById('circlesContent');
         const circle = await circlesManager.getCircleDetails(this.currentCircleId);
         const challenge = circle.activeChallenge;
 
-        let html = '<div class="circles-form">';
-        html += '<h3 class="circles-section-title">Escribe tu entrada</h3>';
-        
-        html += `
-            <div class="circles-challenge-image">
-                <img src="${challenge.image.url}" alt="Imagen del ejercicio">
-            </div>
-            
-            <div class="circles-form-group">
-                <label class="circles-form-label" for="entryTitle">Título (opcional)</label>
-                <input type="text" id="entryTitle" class="circles-form-input" placeholder="Dale un título a tu entrada" maxlength="100">
-            </div>
+        // Calcular tiempo restante
+        const deadline = new Date(challenge.deadline);
+        const now = new Date();
+        const timeLeft = deadline - now;
+        const hoursLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60)));
+        const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
 
-            <div class="circles-form-group">
-                <label class="circles-form-label" for="entryText">Tu escrito *</label>
-                <textarea id="entryText" class="circles-form-textarea" placeholder="Escribe sobre esta imagen..." rows="12" required></textarea>
-                <small class="circles-form-hint"><span id="entryCharCount">0</span> palabras</small>
-            </div>
-
-            <div class="circles-form-actions">
-                <button class="circles-btn circles-btn-secondary" onclick="circlesUI.showCircleDetail('${this.currentCircleId}')">Cancelar</button>
-                <button class="circles-btn circles-btn-primary" onclick="circlesUI.submitEntry()">Enviar Entrada</button>
+        // Generar HTML con el mismo diseño que entry-view
+        const entryHTML = `
+            <div class="entry-view" data-circle-write-mode="true">
+                <div class="entry-image-container">
+                    <img src="${challenge.image.url}" alt="Imagen del ejercicio" class="entry-image">
+                </div>
+                <div class="entry-right-side">
+                    <div class="entry-content-container">
+                        <div class="entry-meta">
+                            <div class="entry-date">Escribir Entrada</div>
+                            <div class="entry-mood-display">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <span id="circleWriteCountdown" style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${hoursLeft}h ${minutesLeft}m restantes</span>
+                            </div>
+                        </div>
+                        <input type="text" id="circleEntryTitle" class="entry-title-edit" placeholder="Título (opcional)" maxlength="100" style="display: block; margin-bottom: 1rem;">
+                        <textarea id="circleEntryText" class="entry-text-edit" placeholder="Escribe sobre esta imagen..." style="display: block; min-height: 400px; resize: vertical;"></textarea>
+                        <div class="entry-stats" style="margin-top: 0.75rem;">
+                            <span id="circleEntryWordCount">0 palabras</span>
+                        </div>
+                        ${challenge.image.photographer !== 'Demo' ? `
+                            <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
+                                Foto por ${challenge.image.photographer}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="entry-actions">
+                        <button class="btn-secondary" onclick="circlesUI.closeWriteEntryModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                            Cancelar
+                        </button>
+                        <button class="btn-primary" onclick="circlesUI.submitEntry()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Enviar Entrada
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
-        html += '</div>';
 
-        content.innerHTML = html;
+        // Abrir modal
+        const modal = document.getElementById('circleWriteEntryModal');
+        const content = document.getElementById('circleWriteEntryContent');
+        content.innerHTML = entryHTML;
+        modal.classList.add('active');
 
-        document.getElementById('entryText').addEventListener('input', (e) => {
+        // Event listener para contador de palabras
+        document.getElementById('circleEntryText').addEventListener('input', (e) => {
             const wordCount = e.target.value.trim().split(/\s+/).filter(w => w).length;
-            document.getElementById('entryCharCount').textContent = wordCount;
+            document.getElementById('circleEntryWordCount').textContent = `${wordCount} palabra${wordCount !== 1 ? 's' : ''}`;
         });
+
+        // Iniciar countdown
+        this.startCountdownTimer(challenge.deadline, challenge.id, 'circleWriteCountdown');
+    }
+
+    closeWriteEntryModal() {
+        const modal = document.getElementById('circleWriteEntryModal');
+        modal.classList.remove('active');
+        
+        // Limpiar countdown
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
+        }
     }
 
     async submitEntry() {
-        const title = document.getElementById('entryTitle').value.trim();
-        const text = document.getElementById('entryText').value.trim();
+        const title = document.getElementById('circleEntryTitle').value.trim();
+        const text = document.getElementById('circleEntryText').value.trim();
 
         if (!text) {
             this.showToast('Por favor escribe algo', 'error');
@@ -719,6 +1744,7 @@ class CirclesUI {
             await circlesManager.submitChallengeEntry(circle.activeChallenge.id, this.currentCircleId, title, text);
             
             this.showToast('✅ Entrada enviada!', 'success');
+            this.closeWriteEntryModal();
             await this.showCircleDetail(this.currentCircleId);
         } catch (error) {
             console.error('Error submitting entry:', error);
@@ -743,7 +1769,7 @@ class CirclesUI {
                             <circle cx="8.5" cy="8.5" r="1.5"></circle>
                             <polyline points="21 15 16 10 5 21"></polyline>
                         </svg>
-                        Imagen del Día
+                        Tu Imagen del Día
                     </button>
                     <button class="circles-btn circles-btn-secondary circles-btn-sm" data-source="bank" onclick="circlesUI.selectImageSource('bank')">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -781,7 +1807,7 @@ class CirclesUI {
         content.innerHTML = html;
         
         // Initialize with current day's image
-        this.selectedImage = window.currentImage;
+        this.selectedImage = window.currentState?.imageData || null;
         await this.renderImageSource('current');
     }
 
@@ -790,7 +1816,9 @@ class CirclesUI {
         
         if (source === 'current') {
             // Show current day's image
-            if (!window.currentImage) {
+            const currentImage = window.currentState?.imageData;
+            
+            if (!currentImage) {
                 container.innerHTML = '<p class="circles-empty-subtitle" style="text-align: center; padding: 2rem;">No hay imagen del día disponible</p>';
                 this.selectedImage = null;
                 return;
@@ -798,64 +1826,189 @@ class CirclesUI {
             
             container.innerHTML = `
                 <div class="circles-challenge-image" id="imagePreview">
-                    <img src="${window.currentImage.url}" alt="Vista previa" style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px;">
-                    <div class="circles-challenge-credit">Foto por ${window.currentImage.photographer}</div>
+                    <img src="${currentImage.url}" alt="Vista previa" style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px;">
+                    <div class="circles-challenge-credit">Foto por ${currentImage.photographer}</div>
                 </div>
             `;
-            this.selectedImage = window.currentImage;
+            this.selectedImage = currentImage;
         } else if (source === 'bank') {
-            // Query user's image bank
-            container.innerHTML = '<div class="circles-loading"><div class="circles-loading-spinner"></div><p>Cargando banco de imágenes...</p></div>';
+            // Abrir modal inmediatamente
+            await this.openImageBankModal();
+        }
+    }
+
+    async openImageBankModal() {
+        // Create modal overlay
+        const modalHTML = `
+            <div class="circles-bank-modal" id="circleBankModal">
+                <div class="circles-bank-modal-content">
+                    <div class="circles-bank-modal-header">
+                        <h3>Mi Banco de Imágenes</h3>
+                        <button class="circles-close-btn" onclick="circlesUI.closeImageBankModal()">&times;</button>
+                    </div>
+                    <div class="circles-bank-modal-body" id="bankModalBody">
+                        <div class="circles-loading"><div class="circles-loading-spinner"></div><p>Cargando imágenes...</p></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Load images
+        await this.loadBankImages();
+    }
+
+    closeImageBankModal() {
+        const modal = document.getElementById('circleBankModal');
+        if (modal) modal.remove();
+    }
+
+    async loadBankImages(offset = 0) {
+        const container = document.getElementById('bankModalBody');
+        const limit = 20;
+        
+        try {
+            const userId = window.currentUser?.id || circlesManager.currentUserId;
             
-            try {
-                const { data: userImages, error } = await supabaseClient
-                    .from('user_images')
-                    .select('*')
-                    .eq('user_id', this.currentUserId || window.currentUser.id)
-                    .order('created_at', { ascending: false });
+            if (!userId) {
+                throw new Error('Usuario no autenticado');
+            }
+            
+            // Load with pagination - use thumbnail_url for speed
+            const { data: userImages, error } = await supabaseClient
+                .from('user_images')
+                .select('id, thumbnail_url, title, created_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
 
-                if (error) throw error;
+            if (error) throw error;
 
-                if (!userImages || userImages.length === 0) {
+            if (!userImages || userImages.length === 0) {
+                if (offset === 0) {
                     container.innerHTML = `
                         <div class="circles-empty">
                             <p class="circles-empty-title">No tienes imágenes guardadas</p>
-                            <p class="circles-empty-subtitle">Las imágenes que guardes en tu banco aparecerán aquí</p>
+                            <p class="circles-empty-subtitle">Las imágenes que guardes aparecerán aquí</p>
                         </div>
                     `;
-                    this.selectedImage = null;
-                    return;
                 }
+                return;
+            }
 
-                // Render image grid
-                let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; margin: 1rem 0;">';
-                userImages.forEach(img => {
-                    const imageData = typeof img.image_data === 'string' ? JSON.parse(img.image_data) : img.image_data;
-                    html += `
-                        <div class="circles-bank-image ${this.selectedImage?.url === imageData.url ? 'circles-selected' : ''}" 
-                             onclick="circlesUI.selectBankImage('${img.id}')"
-                             data-image-id="${img.id}">
-                            <img src="${imageData.url}" alt="${imageData.photographer}" 
-                                 style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: pointer;">
-                            <small style="font-size: 0.7rem; color: var(--circles-text-secondary); display: block; margin-top: 0.25rem;">
-                                ${imageData.photographer}
-                            </small>
-                        </div>
-                    `;
-                });
+            // Render image grid
+            let html = offset === 0 ? '<div class="circles-bank-grid" id="bankImageGrid">' : '';
+            
+            userImages.forEach(img => {
+                const imageUrl = img.thumbnail_url;
+                const title = img.title || 'Mi imagen';
+                
+                if (!imageUrl) return;
+                
+                html += `
+                    <div class="circles-bank-thumb" onclick="circlesUI.selectImageFromBank('${img.id}', '${imageUrl.replace(/'/g, "\\'")}', '${title.replace(/'/g, "\\'")}')">
+                        <img src="${imageUrl}" alt="${title}" loading="lazy">
+                        <div class="circles-bank-thumb-title">${title}</div>
+                    </div>
+                `;
+            });
+            
+            if (offset === 0) {
                 html += '</div>';
                 
+                // Add "Load More" button if there might be more
+                if (userImages.length === limit) {
+                    html += `
+                        <div class="circles-load-more-container" style="margin-top: 1rem;">
+                            <button class="circles-load-more-btn" onclick="circlesUI.loadMoreBankImages()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                                Cargar más
+                            </button>
+                        </div>
+                    `;
+                }
+                
                 container.innerHTML = html;
+            } else {
+                // Append to existing grid
+                const grid = document.getElementById('bankImageGrid');
+                if (grid) {
+                    userImages.forEach(img => {
+                        const imageUrl = img.thumbnail_url;
+                        const title = img.title || 'Mi imagen';
+                        
+                        if (!imageUrl) return;
+                        
+                        const thumbHTML = `
+                            <div class="circles-bank-thumb" onclick="circlesUI.selectImageFromBank('${img.id}', '${imageUrl.replace(/'/g, "\\'")}', '${title.replace(/'/g, "\\'")}')">
+                                <img src="${imageUrl}" alt="${title}" loading="lazy">
+                                <div class="circles-bank-thumb-title">${title}</div>
+                            </div>
+                        `;
+                        grid.insertAdjacentHTML('beforeend', thumbHTML);
+                    });
+                }
                 
-                // Store user images for selection
-                this.userImages = userImages;
-                
-            } catch (error) {
-                console.error('Error loading image bank:', error);
-                container.innerHTML = '<p class="circles-empty-subtitle" style="text-align: center; padding: 2rem; color: var(--circles-danger);">Error al cargar imágenes</p>';
-                this.selectedImage = null;
+                // Update or remove "Load More" button
+                const loadMoreBtn = document.querySelector('.circles-load-more-container');
+                if (userImages.length < limit && loadMoreBtn) {
+                    loadMoreBtn.remove();
+                }
             }
+            
+            // Store current offset for pagination
+            this.bankImagesOffset = offset;
+            
+        } catch (error) {
+            console.error('Error loading image bank:', error);
+            container.innerHTML = `<p class="circles-empty-subtitle" style="text-align: center; padding: 2rem; color: var(--circles-danger);">Error: ${error.message}</p>`;
         }
+    }
+
+    async loadMoreBankImages() {
+        const newOffset = this.bankImagesOffset + 20;
+        await this.loadBankImages(newOffset);
+    }
+
+    async selectImageFromBank(imageId, thumbnailUrl, title) {
+        // Need to get the full image_url
+        const { data: imageRecord, error } = await supabaseClient
+            .from('user_images')
+            .select('image_url, thumbnail_url, title')
+            .eq('id', imageId)
+            .single();
+        
+        if (error || !imageRecord) {
+            console.error('Error fetching full image:', error);
+            return;
+        }
+        
+        // Store selected image
+        this.selectedBankImage = {
+            url: imageRecord.image_url,
+            photographer: imageRecord.title || 'Usuario',
+            thumbnailUrl: imageRecord.thumbnail_url
+        };
+        
+        this.selectedImage = this.selectedBankImage;
+        
+        // Close modal
+        this.closeImageBankModal();
+        
+        // Update the preview in the main container with the selected image
+        const container = document.getElementById('imageSourceContainer');
+        container.innerHTML = `
+            <div class="circles-challenge-image" id="imagePreview">
+                <img src="${this.selectedBankImage.url}" alt="Vista previa" style="width: 100%; height: 300px; object-fit: cover; border-radius: 8px;">
+                <div class="circles-challenge-credit">${this.selectedBankImage.photographer}</div>
+            </div>
+        `;
+        
+        // Show toast
+        this.showToast('Imagen seleccionada', 'success');
     }
 
     async selectImageSource(source) {
@@ -872,23 +2025,6 @@ class CirclesUI {
         });
 
         await this.renderImageSource(source);
-    }
-
-    async selectBankImage(imageId) {
-        // Find the image data
-        const imageRecord = this.userImages.find(img => img.id === imageId);
-        if (!imageRecord) return;
-        
-        const imageData = typeof imageRecord.image_data === 'string' ? 
-            JSON.parse(imageRecord.image_data) : imageRecord.image_data;
-        
-        this.selectedImage = imageData;
-        
-        // Update selection styling
-        document.querySelectorAll('.circles-bank-image').forEach(el => {
-            el.classList.remove('circles-selected');
-        });
-        document.querySelector(`[data-image-id="${imageId}"]`)?.classList.add('circles-selected');
     }
 
     async submitProposal() {
@@ -972,6 +2108,29 @@ class CirclesUI {
                 </div>
                 
                 <div class="circles-form-group">
+                    <label class="circles-form-label">Tipo de Círculo</label>
+                    <div class="circles-toggle-container">
+                        <button class="circles-toggle-option circles-toggle-active" data-type="private" onclick="circlesUI.selectCircleType('private')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            <span>Privado</span>
+                            <small>Solo por invitación</small>
+                        </button>
+                        <button class="circles-toggle-option" data-type="public" onclick="circlesUI.selectCircleType('public')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                            <span>Público</span>
+                            <small>Visible en el feed</small>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="circles-form-group">
                     <label class="circles-form-label" for="maxMembers">Límite de Miembros</label>
                     <input type="number" id="maxMembers" class="circles-form-input" value="12" min="2" max="12">
                     <small class="circles-form-hint">Cada círculo puede tener máximo 12 miembros</small>
@@ -991,6 +2150,20 @@ class CirclesUI {
                 this.classList.add('circles-selected');
             });
         });
+
+        // Inicializar estado del toggle
+        this.circleTypeSelected = 'private';
+    }
+
+    selectCircleType(type) {
+        this.circleTypeSelected = type;
+        document.querySelectorAll('.circles-toggle-option').forEach(btn => {
+            if (btn.dataset.type === type) {
+                btn.classList.add('circles-toggle-active');
+            } else {
+                btn.classList.remove('circles-toggle-active');
+            }
+        });
     }
 
     async submitCreateCircle() {
@@ -998,6 +2171,7 @@ class CirclesUI {
         const description = document.getElementById('circleDescription').value.trim();
         const color = document.querySelector('.circles-color-option.circles-selected')?.dataset.color || '#3b82f6';
         const maxMembers = parseInt(document.getElementById('maxMembers').value) || 12;
+        const isPublic = this.circleTypeSelected === 'public';
 
         if (!name) {
             this.showToast('Ingresa un nombre para el círculo', 'error');
@@ -1039,9 +2213,9 @@ class CirclesUI {
             btn.disabled = true;
             btn.textContent = 'Creando...';
 
-            await circlesManager.createCircle(name, description, color, maxMembers);
+            await circlesManager.createCircle(name, description, color, maxMembers, isPublic);
             
-            this.showToast('✅ Círculo creado exitosamente!', 'success');
+            this.showToast(`✅ Círculo ${isPublic ? 'público' : 'privado'} creado exitosamente!`, 'success');
             await this.showCirclesList();
         } catch (error) {
             console.error('Error creating circle:', error);
@@ -1325,6 +2499,22 @@ class CirclesUI {
                                 <label class="circles-form-label" for="editCircleDescription">Descripción (opcional)</label>
                                 <textarea id="editCircleDescription" class="circles-form-textarea" maxlength="200" rows="3">${circle.description || ''}</textarea>
                             </div>
+                            
+                            ${circle.is_public ? `
+                                <div style="padding: 1rem; background: rgba(239, 180, 68, 0.1); border: 1px solid rgba(239, 180, 68, 0.3); border-radius: 8px; margin-bottom: 1rem;">
+                                    <p style="color: var(--circles-warning); font-size: 0.875rem; margin: 0 0 0.75rem 0; line-height: 1.5;">
+                                        <strong>🌍 Círculo Público</strong><br>
+                                        Este círculo es visible en el feed público. Puedes cerrarlo para que sea privado.
+                                    </p>
+                                    <button class="circles-btn circles-btn-danger circles-btn-sm" style="width: 100%;" onclick="circlesUI.confirmCloseCircle()">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                        </svg>
+                                        Cerrar Círculo (Hacerlo Privado)
+                                    </button>
+                                </div>
+                            ` : ''}
                             
                             <button class="circles-btn circles-btn-primary" style="width: 100%;" id="saveEditBtn" onclick="circlesUI.saveCircleEdit()">
                                 Guardar Cambios
@@ -1610,6 +2800,68 @@ class CirclesUI {
             if (btn) {
                 btn.disabled = false;
                 btn.textContent = 'Eliminar Círculo';
+            }
+        }
+    }
+
+    confirmCloseCircle() {
+        document.querySelector('.circles-invite-modal')?.remove();
+        
+        const modalHTML = `
+            <div class="circles-invite-modal" onclick="this.remove()">
+                <div class="circles-invite-container" onclick="event.stopPropagation()">
+                    <div class="circles-invite-header">
+                        <h3 class="circles-invite-title">🔒 Cerrar Círculo</h3>
+                        <button class="circles-close-btn" onclick="this.closest('.circles-invite-modal').remove()">&times;</button>
+                    </div>
+                    <div class="circles-invite-body">
+                        <p style="color: var(--circles-text-primary); margin-bottom: 1rem; line-height: 1.6;">
+                            ¿Estás seguro que quieres cerrar este círculo y hacerlo privado?
+                        </p>
+                        
+                        <div style="padding: 1rem; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; margin-bottom: 1rem;">
+                            <p style="color: var(--circles-primary); font-size: 0.875rem; margin: 0; line-height: 1.5;">
+                                <strong>ℹ️ ¿Qué significa esto?</strong><br>
+                                • El círculo ya no será visible en el feed público<br>
+                                • Los miembros actuales permanecerán en el círculo<br>
+                                • Solo podrás agregar nuevos miembros por invitación
+                            </p>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="circles-btn circles-btn-secondary" style="flex: 1;" onclick="this.closest('.circles-invite-modal').remove()">
+                                Cancelar
+                            </button>
+                            <button class="circles-btn circles-btn-primary" style="flex: 1;" id="confirmCloseBtn" onclick="circlesUI.executeCloseCircle()">
+                                Cerrar Círculo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    async executeCloseCircle() {
+        const btn = document.getElementById('confirmCloseBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Cerrando...';
+        }
+
+        try {
+            await circlesManager.closeCircle(this.currentCircleId);
+            this.showToast('✅ Círculo cerrado exitosamente', 'success');
+            document.querySelector('.circles-invite-modal')?.remove();
+            await this.showCircleDetail(this.currentCircleId);
+        } catch (error) {
+            console.error('Error closing circle:', error);
+            this.showToast('Error al cerrar círculo', 'error');
+            
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Cerrar Círculo';
             }
         }
     }

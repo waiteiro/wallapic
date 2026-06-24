@@ -61,6 +61,29 @@
     animation: circles-pulse-notification 2s ease-in-out infinite;
 }
 
+/* Indicador de nuevas entradas en Feed Público */
+#historyBtn {
+    position: relative;
+}
+
+.feed-new-indicator {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: 8px;
+    height: 8px;
+    background: var(--circles-danger);
+    border-radius: 50%;
+    border: 2px solid rgba(18, 18, 23, 1);
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+[data-theme="light"] .feed-new-indicator {
+    border-color: #ffffff;
+}
+
 @keyframes circles-pulse-notification {
     0%, 100% {
         transform: scale(1);
@@ -174,6 +197,64 @@
     padding: 1.5rem;
     overflow-y: auto;
     flex: 1;
+}
+
+/* ========================================
+   SCROLLBAR MODERNO Y DELGADO
+   ======================================== */
+
+/* Firefox */
+.circles-modal-body {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.5) rgba(255, 255, 255, 0.05);
+}
+
+/* Chrome, Edge, Safari */
+.circles-modal-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+.circles-modal-body::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 2px;
+}
+
+.circles-modal-body::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 2px;
+    transition: background 0.2s;
+}
+
+.circles-modal-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.7);
+}
+
+.circles-modal-body::-webkit-scrollbar-thumb:active {
+    background: var(--circles-primary);
+}
+
+/* Scrollbar para la sección de círculos públicos colapsable */
+.circles-public-content {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.5) rgba(255, 255, 255, 0.05);
+}
+
+.circles-public-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.circles-public-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 2px;
+}
+
+.circles-public-content::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 2px;
+}
+
+.circles-public-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.7);
 }
 
 /* ========================================
@@ -403,14 +484,29 @@
     box-shadow: 0 12px 32px rgba(0,0,0,0.3);
 }
 
+.circles-card-pinned {
+    border: 2px solid var(--circles-primary);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+}
+
+.circles-card-pinned:hover {
+    box-shadow: 0 12px 32px rgba(99, 102, 241, 0.3);
+}
+
 
 .circles-card-header {
     padding: 1.5rem;
     color: white;
     position: relative;
-    min-height: 100px;
+    min-height: 80px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+}
+
+.circles-card-header-compact {
+    min-height: 70px;
+    padding: 1rem 1.25rem;
 }
 
 .circles-card-name {
@@ -418,9 +514,60 @@
     font-weight: 600;
     margin: 0;
     letter-spacing: -0.01em;
+    flex: 1;
+    padding-right: 0.5rem;
+}
+
+.circles-card-badges {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    z-index: 2;
 }
 
 .circles-admin-badge {
+    background: rgba(0,0,0,0.25);
+    backdrop-filter: blur(10px);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.circles-pin-btn {
+    background: rgba(0,0,0,0.25);
+    backdrop-filter: blur(10px);
+    border: none;
+    padding: 0.35rem;
+    border-radius: 4px;
+    cursor: pointer;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.circles-pin-btn:hover {
+    background: rgba(0,0,0,0.4);
+    transform: scale(1.1);
+}
+
+.circles-pin-btn.circles-pinned {
+    background: var(--circles-primary);
+    color: white;
+}
+
+.circles-pin-btn.circles-pinned:hover {
+    background: var(--circles-primary-hover);
+}
+
+.circles-public-badge {
     position: absolute;
     top: 0.75rem;
     right: 0.75rem;
@@ -432,6 +579,27 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.circles-card-notification-badge {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    min-width: 24px;
+    height: 24px;
+    background: var(--circles-danger);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+    border: 2px solid var(--circles-bg-strong);
+    z-index: 10;
+    animation: circles-pulse-notification 2s ease-in-out infinite;
 }
 
 .circles-card-body {
@@ -456,11 +624,271 @@
     align-items: center;
     padding-top: 0.75rem;
     border-top: 1px solid var(--circles-border);
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .circles-members-count {
     font-size: 0.875rem;
     color: var(--circles-text-secondary);
+}
+
+.circles-pending-indicator {
+    font-size: 0.8rem;
+    color: var(--circles-danger);
+    font-weight: 600;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.circles-card-creator {
+    font-size: 0.8rem;
+    color: var(--circles-text-secondary);
+    margin: 0 0 0.75rem 0;
+}
+
+.circles-card-creator strong {
+    color: var(--circles-text-primary);
+}
+
+/* ========================================
+   CÍRCULOS PÚBLICOS - SECCIÓN COLAPSABLE
+   ======================================== */
+
+.circles-public-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 2px solid var(--circles-border);
+}
+
+.circles-collapsable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+    padding: 0.75rem 1rem;
+    margin: 0 -1rem 1rem -1rem;
+    border-radius: 8px;
+}
+
+.circles-collapsable-header:hover {
+    background: var(--circles-bg-light);
+}
+
+.circles-public-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.circles-public-counter {
+    background: var(--circles-primary);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    min-width: 24px;
+    text-align: center;
+}
+
+.circles-collapse-icon {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--circles-text-secondary);
+}
+
+.circles-collapse-icon.circles-rotated {
+    transform: rotate(-180deg);
+}
+
+.circles-public-content {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    opacity: 1;
+}
+
+.circles-public-content.circles-collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+/* ========================================
+   BOTÓN CARGAR MÁS (MIS CÍRCULOS)
+   ======================================== */
+
+.circles-load-more-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.circles-load-more-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
+    border-radius: 8px;
+    color: var(--circles-text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.circles-load-more-btn:hover {
+    background: var(--circles-bg-medium);
+    border-color: var(--circles-primary);
+    transform: translateY(-1px);
+}
+
+.circles-load-more-btn svg {
+    transition: transform 0.2s;
+}
+
+.circles-load-more-btn:hover svg {
+    transform: translateY(2px);
+}
+
+/* ========================================
+   INFINITE SCROLL LOADER (CÍRCULOS PÚBLICOS)
+   ======================================== */
+
+.circles-infinite-loader {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--circles-text-secondary);
+}
+
+.circles-infinite-loader .circles-loading-spinner {
+    margin: 0 auto 0.75rem;
+}
+
+.circles-infinite-loader p {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* ========================================
+   MODAL DE BANCO DE IMÁGENES
+   ======================================== */
+
+.circles-bank-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(12px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.circles-bank-modal-content {
+    max-width: 900px;
+    width: 92vw;
+    max-height: 85vh;
+    background: var(--circles-bg-strong);
+    border: 1px solid var(--circles-border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+.circles-bank-modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--circles-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.circles-bank-modal-header h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--circles-text-primary);
+}
+
+.circles-bank-modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Scrollbar para modal de banco */
+.circles-bank-modal-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+.circles-bank-modal-body::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 2px;
+}
+
+.circles-bank-modal-body::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 2px;
+}
+
+.circles-bank-modal-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.7);
+}
+
+.circles-bank-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.circles-bank-thumb {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    aspect-ratio: 1;
+    background: var(--circles-bg-light);
+}
+
+.circles-bank-thumb:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.circles-bank-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.circles-bank-thumb-title {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.5));
+    color: white;
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1;
+    max-height: 2rem;
+    display: block;
 }
 
 
@@ -491,6 +919,64 @@
     color: var(--circles-text-secondary);
     margin-top: 0.25rem;
     font-style: italic;
+}
+
+/* Toggle para tipo de círculo (privado/público) */
+.circles-toggle-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.circles-toggle-option {
+    all: initial;
+    box-sizing: border-box;
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--circles-bg-light);
+    border: 2px solid var(--circles-border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: center;
+}
+
+.circles-toggle-option svg {
+    color: var(--circles-text-secondary);
+    transition: color 0.2s;
+}
+
+.circles-toggle-option span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--circles-text-primary);
+    display: block;
+}
+
+.circles-toggle-option small {
+    font-size: 0.75rem;
+    color: var(--circles-text-secondary);
+    display: block;
+}
+
+.circles-toggle-option:hover {
+    background: var(--circles-bg-medium);
+    border-color: var(--circles-primary);
+    transform: translateY(-2px);
+}
+
+.circles-toggle-option.circles-toggle-active {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+    border-color: var(--circles-primary);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.circles-toggle-option.circles-toggle-active svg {
+    color: var(--circles-primary);
 }
 
 .circles-form-input,
@@ -687,6 +1173,78 @@ select.circles-form-input option {
     margin-bottom: 1.5rem;
 }
 
+/* ========================================
+   SOLICITUDES PENDIENTES (DETALLE DEL CÍRCULO)
+   ======================================== */
+
+.circles-join-requests-section {
+    background: var(--circles-bg-light);
+    border: 1px solid var(--circles-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.circles-join-requests-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.circles-join-request-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--circles-bg-medium);
+    border: 1px solid var(--circles-border);
+    border-radius: 10px;
+    transition: all 0.2s;
+}
+
+.circles-join-request-card:hover {
+    background: var(--circles-bg-strong);
+    border-color: var(--circles-primary);
+}
+
+.circles-request-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.circles-request-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.circles-request-username {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+    color: var(--circles-text-primary);
+}
+
+.circles-request-date {
+    font-size: 0.8rem;
+    color: var(--circles-text-secondary);
+    margin: 0;
+}
+
+.circles-request-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
 .circles-challenge-image {
     width: 100%;
     border-radius: 8px;
@@ -710,6 +1268,10 @@ select.circles-form-input option {
     padding: 0.25rem 0.75rem;
     border-radius: 6px;
     font-size: 0.75rem;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .circles-challenge-proposer {
@@ -1336,3 +1898,576 @@ select.circles-form-input option {
 .circles-flex {
     display: flex !important;
 }
+
+/* ========================================
+   MODAL DE ESCRITURA DE ENTRADA (POR ENCIMA)
+   ======================================== */
+
+#circleWriteEntryModal {
+    z-index: 1500 !important; /* Por encima del modal de círculos (1000) */
+    background-color: rgba(0, 0, 0, 0.92); /* Más oscuro para mejor contraste */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+#circleWriteEntryModal .modal-content {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    max-width: 100%;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+#circleWriteEntryModal .modal-header {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+#circleWriteEntryModal .modal-body {
+    padding: 0;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#circleWriteEntryModal .entry-view {
+    width: 100%;
+    height: 100%;
+    max-width: 1400px;
+    max-height: 85vh;
+}
+
+/* Textarea sin recuadro - scroll libre */
+#circleWriteEntryModal .entry-text-edit {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    resize: none !important;
+    overflow: visible !important;
+}
+
+#circleWriteEntryModal .entry-text-edit:focus {
+    outline: none !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* Input de título sin recuadro */
+#circleWriteEntryModal .entry-title-edit {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+#circleWriteEntryModal .entry-title-edit:focus {
+    outline: none !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+
+
+/* ========================================
+   SCROLLBAR MODERNO SOLO PARA TEXTAREA
+   ======================================== */
+
+#circleEntryText::-webkit-scrollbar {
+    width: 6px;
+}
+
+#circleEntryText::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#circleEntryText::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+#circleEntryText::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.7);
+}
+
+/* Firefox */
+#circleEntryText {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.4) transparent;
+}
+
+/* ========================================
+   INDICADOR DE EJERCICIO PENDIENTE
+   ======================================== */
+
+.circles-challenge-indicator {
+    font-size: 1.1rem;
+    line-height: 1;
+    margin-right: 0.05rem;
+    pointer-events: none;
+}
+
+/* ========================================
+   HISTORIAL DE EJERCICIOS (TARJETAS)
+   ======================================== */
+
+.circles-challenges-history {
+    margin-top: 2rem;
+}
+
+.circles-challenges-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.circles-challenge-card {
+    background: var(--circles-card-bg);
+    border: 1px solid var(--circles-border);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.circles-challenge-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    border-color: var(--circles-primary);
+}
+
+.circles-challenge-card.circles-challenge-active {
+    border-color: var(--circles-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.circles-challenge-card-image {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    overflow: hidden;
+}
+
+.circles-challenge-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.circles-challenge-pending-badge,
+.circles-challenge-done-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    backdrop-filter: blur(10px);
+}
+
+.circles-challenge-pending-badge {
+    background: rgba(255, 165, 0, 0.9);
+    color: white;
+}
+
+.circles-challenge-done-badge {
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+}
+
+.circles-challenge-card-body {
+    padding: 0.75rem;
+}
+
+.circles-challenge-card-author {
+    font-size: 0.85rem;
+    color: var(--circles-text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.circles-challenge-card-date {
+    font-size: 0.75rem;
+    color: var(--circles-text-secondary);
+    opacity: 0.7;
+    margin-bottom: 0.5rem;
+}
+
+.circles-challenge-card-stats {
+    font-size: 0.85rem;
+    color: var(--circles-text);
+    margin-bottom: 0.5rem;
+}
+
+.circles-btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* ========================================
+   MODAL DE ENTRADAS DE EJERCICIO
+   ======================================== */
+
+#challengeEntriesModal {
+    z-index: 1500 !important;
+    background-color: rgba(0, 0, 0, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+#challengeEntriesModal .modal-content {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    max-width: 100%;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+#challengeEntriesModal .modal-header {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+#challengeEntriesModal .modal-body {
+    padding: 0;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.circles-challenge-entries-view {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: var(--circles-bg-strong);
+    border-radius: 16px;
+    padding: 2rem;
+}
+
+.circles-challenge-header {
+    margin-bottom: 2rem;
+}
+
+.circles-challenge-full-image {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+
+.circles-challenge-header-info h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.circles-challenge-date {
+    font-size: 0.9rem;
+    color: var(--circles-text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.circles-challenge-stats {
+    font-size: 0.9rem;
+    color: var(--circles-text-secondary);
+}
+
+.circles-entries-list {
+    margin-top: 2rem;
+}
+
+.circles-entries-list-title {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+}
+
+.circles-entry-card {
+    background: var(--circles-card-bg);
+    border: 1px solid var(--circles-border);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.circles-entry-card:hover {
+    border-color: var(--circles-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.circles-entry-card.circles-own-entry {
+    border-color: var(--circles-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.circles-entry-card-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.circles-entry-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: white;
+    margin-right: 0.75rem;
+}
+
+.circles-entry-card-info {
+    flex: 1;
+}
+
+.circles-entry-card-author {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.circles-entry-card-title {
+    font-size: 0.9rem;
+    color: var(--circles-text-secondary);
+    margin: 0;
+}
+
+.circles-entry-card-preview {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--circles-text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.circles-entry-card-footer {
+    font-size: 0.8rem;
+    color: var(--circles-text-secondary);
+    opacity: 0.7;
+}
+
+/* Scrollbar para vista de entradas */
+.circles-challenge-entries-view::-webkit-scrollbar {
+    width: 6px;
+}
+
+.circles-challenge-entries-view::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.circles-challenge-entries-view::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 3px;
+}
+
+.circles-challenge-entries-view::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.7);
+}
+
+/* Firefox */
+.circles-challenge-entries-view {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.4) transparent;
+}
+
+/* ========================================
+   CONTROLES DE NAVEGACIÓN DE ENTRADA
+   ======================================== */
+
+.entry-modal-close-btn {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+    opacity: 0.6;
+}
+
+.entry-modal-close-btn:hover {
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    opacity: 1;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.entry-nav-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+    opacity: 0.6;
+}
+
+.entry-nav-btn:hover {
+    background: rgba(99, 102, 241, 0.6);
+    color: white;
+    opacity: 1;
+    transform: translateY(-50%) scale(1.05);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.entry-nav-prev {
+    left: 2rem;
+}
+
+.entry-nav-next {
+    right: 2rem;
+}
+
+.entry-counter {
+    position: fixed;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+    font-weight: 500;
+    z-index: 10;
+    opacity: 0.6;
+    transition: all 0.2s;
+}
+
+.entry-counter:hover {
+    opacity: 1;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .entry-modal-close-btn {
+        top: 1rem;
+        right: 1rem;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .entry-nav-btn {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .entry-nav-prev {
+        left: 1rem;
+    }
+    
+    .entry-nav-next {
+        right: 1rem;
+    }
+    
+    .entry-counter {
+        top: 1rem;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+    }
+}
+
+/* Botón cerrar dentro del modal de ejercicio */
+.circles-sticky-header {
+    position: sticky;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 0;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.circles-modal-close-inside {
+    position: absolute;
+    top: -1.25rem;
+    right: -1.25rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 101;
+    opacity: 0.8;
+    pointer-events: all;
+}
+
+.circles-modal-close-inside:hover {
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    opacity: 1;
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+/* Ocultar el botón X del header del modal */
+#challengeEntriesModal .modal-header {
+    display: none;
+}
+

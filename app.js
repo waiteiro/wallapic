@@ -810,6 +810,10 @@ async function saveEntry() {
         console.log('📝 Actualizando entrada existente, ID:', entry.id, 'Supabase ID:', entry.supabaseId);
     } else {
         // NUEVA entrada
+        
+        // Verificar si hay resonancia pendiente
+        const resonanceOf = await checkResonanceBeforeSave();
+        
         entry = {
             id: Date.now(),
             date: getLocalISOString(),
@@ -820,6 +824,8 @@ async function saveEntry() {
             wordCount: currentState.text.trim().split(/\s+/).length,
             charCount: currentState.text.length,
             isPublic: false,
+            // Resonancia
+            resonance_of: resonanceOf,
             // Tiempo de escritura
             writingSeconds: writingSeconds,
             // Datos del timer (metadata interna)
@@ -827,7 +833,10 @@ async function saveEntry() {
             timerSecondsUsed: timerSecondsUsed
         };
         
-        console.log('✨ Creando nueva entrada');
+        console.log('✨ Creando nueva entrada', resonanceOf ? `(resonancia de ${resonanceOf})` : '');
+        
+        // Limpiar datos de resonancia
+        clearResonanceData();
     }
 
     // ========================================
@@ -1292,6 +1301,18 @@ function closeHistory() {
         }
         window.moodScrollHandler = null;
     }
+    
+    // RESETEAR VISTA: Volver al feed principal cuando se cierra el modal
+    // Esto evita que al reabrir se vea brevemente la vista de mood anterior
+    setTimeout(() => {
+        const feedList = document.getElementById('historyList');
+        if (feedList && feedList.classList.contains('feed-mood-view')) {
+            // Solo resetear si está en vista de mood, no tocar si está en feed principal
+            if (typeof renderPublicFeed === 'function') {
+                renderPublicFeed();
+            }
+        }
+    }, 300); // Esperar a que se cierre el modal para evitar flicker
 }
 
 // Renderizar historial (viejo, ahora renombrado a Archivo)
@@ -1357,6 +1378,12 @@ function viewEntry(entryId, source = 'archive') {
                         <span id="entryWordCount">${entry.wordCount} palabras</span>
                         <span id="entryCharCount">${entry.charCount} caracteres</span>
                         ${entry.writingSeconds ? `<span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25);">Tiempo: ${window.formatTime(entry.writingSeconds)}</span>` : ''}
+                        <span id="archiveEntryFavoriteCount" style="display: none; color: var(--accent); align-items: center; gap: 0.25rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                            </svg>
+                            <span id="archiveEntryFavoriteCountNumber">0</span>
+                        </span>
                     </div>
                     ${entry.image.photographer !== 'Demo' && entry.image.source !== 'user_bank' ? `
                         <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
@@ -1434,6 +1461,20 @@ function viewEntry(entryId, source = 'archive') {
     // NO cerrar archivo - permanece de fondo
     // closeArchive();
     elements.entryModal.classList.add('active');
+    
+    // Cargar contador de favoritos si la entrada es pública y tiene supabaseId
+    if (entry.isPublic && entry.supabaseId && typeof getFavoriteCount === 'function') {
+        getFavoriteCount(entry.supabaseId).then(count => {
+            const countElement = document.getElementById('archiveEntryFavoriteCount');
+            const countNumber = document.getElementById('archiveEntryFavoriteCountNumber');
+            if (countElement && countNumber && count > 0) {
+                countNumber.textContent = count;
+                countElement.style.display = 'flex';
+            }
+        }).catch(err => {
+            console.error('Error cargando contador de favoritos:', err);
+        });
+    }
 }
 
 // Cerrar vista de entrada
@@ -1745,18 +1786,27 @@ async function archiveEntry(entryId) {
         const entry = currentState.entries.find(e => String(e.id) === String(entryId));
         if (!entry) return;
         
+        const wasPublic = entry.isPublic;
+        
         entry.isArchived = true;
+        entry.isPublic = false; // Dejar de ser pública al archivar
         
         // Guardar en storage
         if (entry.supabaseId) {
             await window.storageManager.updateEntryFields(entry.id, entry.supabaseId, {
-                is_archived: true
+                is_archived: true,
+                is_public: false // Actualizar en BD también
             });
+            
+            // Limpiar caché del feed público si era pública
+            if (wasPublic && typeof window.clearMoodCache === 'function') {
+                window.clearMoodCache();
+            }
         } else {
             localStorage.setItem('wallapic_entries', JSON.stringify(currentState.entries));
         }
         
-        showToast('Entrada archivada', 'success');
+        showToast(wasPublic ? 'Entrada archivada y quitada del feed público' : 'Entrada archivada', 'success');
         closeEntry();
         
         // Recargar archivo y mostrar tab de archivados
@@ -1791,10 +1841,21 @@ async function unarchiveEntry(entryId) {
         showToast('Entrada restaurada', 'success');
         closeEntry();
         
+        // Verificar cuántas entradas archivadas quedan
+        const remainingArchived = currentState.entries.filter(e => e.isArchived).length;
+        
         // Recargar archivo
         const archiveModal = document.getElementById('archiveModal');
         if (archiveModal && archiveModal.classList.contains('active')) {
-            renderArchive();
+            if (remainingArchived > 0) {
+                // Aún hay archivados: QUEDARSE en la pestaña de archivados
+                archiveManager.switchTab('archived');
+            } else {
+                // Ya no hay archivados: cambiar a "Mis Entradas"
+                archiveManager.switchTab('entries');
+            }
+            
+            // Actualizar visibilidad de la pestaña de archivados
             checkAndShowArchivedTab();
         }
     } catch (error) {

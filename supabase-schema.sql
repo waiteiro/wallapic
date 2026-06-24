@@ -143,6 +143,7 @@ create table circles (
   creator_id uuid references users(id) on delete cascade not null,
   cover_color text default '#6366f1', -- Color de fondo del círculo
   max_members integer default 12 check (max_members <= 12), -- Límite de miembros (máximo 12)
+  is_public boolean default false, -- Círculo público o privado
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -165,6 +166,18 @@ create table circle_invitations (
   status text default 'pending' not null, -- 'pending', 'accepted', 'rejected'
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   responded_at timestamp with time zone
+);
+
+-- Tabla de solicitudes de unión a círculos públicos
+create table circle_join_requests (
+  id uuid default uuid_generate_v4() primary key,
+  circle_id uuid references circles(id) on delete cascade not null,
+  user_id uuid references users(id) on delete cascade not null,
+  username text not null, -- Username del solicitante
+  status text default 'pending' not null, -- 'pending', 'accepted', 'rejected'
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  responded_at timestamp with time zone,
+  unique(circle_id, user_id) -- Un usuario solo puede solicitar una vez por círculo
 );
 
 -- Tabla de ejercicios de imagen del círculo (imagen compartida por todos)
@@ -573,3 +586,32 @@ insert into badges (id, name, description, icon, category, requirement, sort_ord
 
 -- Mensaje de éxito
 select 'Tablas de WallaPic con sistema completo de badges creadas exitosamente!' as resultado;
+
+
+-- ========================================
+-- POLÍTICAS RLS PARA CIRCLE_JOIN_REQUESTS
+-- ========================================
+
+alter table circle_join_requests enable row level security;
+
+-- Permitir a TODOS los usuarios autenticados ver, crear y actualizar solicitudes
+create policy "Anyone can view join requests"
+  on circle_join_requests for select
+  using (true);
+
+create policy "Anyone can create join requests"
+  on circle_join_requests for insert
+  with check (true);
+
+create policy "Anyone can update join requests"
+  on circle_join_requests for update
+  using (true);
+
+create policy "Anyone can delete join requests"
+  on circle_join_requests for delete
+  using (true);
+
+-- GRANT PERMISOS POSTGRESQL (CRÍTICO)
+GRANT ALL ON public.circle_join_requests TO anon;
+GRANT ALL ON public.circle_join_requests TO authenticated;
+GRANT ALL ON public.circle_join_requests TO service_role;
