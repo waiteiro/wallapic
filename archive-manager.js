@@ -2,6 +2,151 @@
 // ARCHIVE MANAGER - Sistema de archivo personal mejorado
 // ============================================
 
+// Helper: Renderizar media (imagen o video) para miniaturas
+function renderMediaThumbnail(imageData, cssClass = 'archive-entry-image') {
+    if (!imageData) return '';
+    
+    // Si es video
+    if (imageData.type === 'video') {
+        return `
+            <video 
+                src="${imageData.url}" 
+                class="${cssClass} archive-video-thumb"
+                loop 
+                muted 
+                playsinline 
+                autoplay
+                crossorigin="anonymous"
+                style="object-fit: cover;"></video>
+        `;
+    }
+    
+    // Si es imagen
+    const thumbnailUrl = imageData.thumbnail || imageData.url;
+    return `<img src="${thumbnailUrl}" alt="${imageData.alt || ''}" class="${cssClass}">`;
+}
+
+// Helper: Renderizar media para vista completa de entrada
+function renderMediaFull(imageData, cssClass = 'entry-image') {
+    if (!imageData) return '';
+    
+    // Si es video
+    if (imageData.type === 'video') {
+        const videoId = `entry-video-${Date.now()}`;
+        const btnId = `audio-btn-${videoId}`;
+        
+        // Agregar evento para posicionar el botón cuando el video se carga
+        setTimeout(() => {
+            const video = document.getElementById(videoId);
+            const btn = document.getElementById(btnId);
+            
+            if (video && btn) {
+                // Función para posicionar el botón
+                const positionButton = () => {
+                    const containerRect = video.parentElement.getBoundingClientRect();
+                    
+                    // Calcular dimensiones reales del video con object-fit: contain
+                    const videoAspect = video.videoWidth / video.videoHeight;
+                    const containerAspect = containerRect.width / containerRect.height;
+                    
+                    let videoDisplayWidth, videoDisplayHeight, offsetX, offsetY;
+                    
+                    if (videoAspect > containerAspect) {
+                        // Video más ancho - se ajusta por ancho del contenedor
+                        videoDisplayWidth = containerRect.width;
+                        videoDisplayHeight = containerRect.width / videoAspect;
+                        offsetX = 0;
+                        offsetY = (containerRect.height - videoDisplayHeight) / 2;
+                    } else {
+                        // Video más alto - se ajusta por alto del contenedor
+                        videoDisplayHeight = containerRect.height;
+                        videoDisplayWidth = containerRect.height * videoAspect;
+                        offsetX = (containerRect.width - videoDisplayWidth) / 2;
+                        offsetY = 0;
+                    }
+                    
+                    // Posicionar botón en la esquina inferior derecha del área VISIBLE del video
+                    // bottom = espacio negro inferior + margen
+                    // right = espacio negro derecho + margen
+                    btn.style.position = 'absolute';
+                    btn.style.bottom = (offsetY + 12) + 'px';
+                    btn.style.right = (offsetX + 12) + 'px';
+                    btn.style.left = 'auto';
+                    btn.style.top = 'auto';
+                };
+                
+                video.addEventListener('loadedmetadata', positionButton);
+                window.addEventListener('resize', positionButton);
+                
+                // Posicionar inmediatamente si ya tiene metadata
+                if (video.readyState >= 1) {
+                    positionButton();
+                }
+            }
+        }, 100);
+        
+        return `
+            <div class="entry-video-wrapper" style="position: relative; width: 100%; height: 100%;">
+                <video 
+                    id="${videoId}"
+                    src="${imageData.url}" 
+                    class="${cssClass}"
+                    loop
+                    muted
+                    autoplay
+                    playsinline
+                    crossorigin="anonymous"
+                    style="width: 100%; height: 100%; object-fit: contain; cursor: pointer;"></video>
+                <button 
+                    id="${btnId}"
+                    class="entry-video-audio-btn" 
+                    onclick="toggleEntryVideoAudio('${videoId}')"
+                    style="position: absolute; background: rgba(0,0,0,0.75); backdrop-filter: blur(10px); border: none; border-radius: 6px; padding: 8px; color: white; cursor: pointer; z-index: 10; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <line x1="23" y1="9" x2="17" y2="15"></line>
+                        <line x1="17" y1="9" x2="23" y2="15"></line>
+                    </svg>
+                </button>
+            </div>
+        `;
+    }
+    
+    // Si es imagen
+    return `<img src="${imageData.url}" alt="${imageData.alt}" class="${cssClass}">`;
+}
+
+// Función para toggle de audio en videos de entrada
+window.toggleEntryVideoAudio = function(videoId) {
+    const video = document.getElementById(videoId);
+    const btn = video?.parentElement?.querySelector('.entry-video-audio-btn');
+    
+    if (!video || !btn) return;
+    
+    video.muted = !video.muted;
+    
+    if (video.muted) {
+        btn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <line x1="23" y1="9" x2="17" y2="15"></line>
+                <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
+        `;
+    } else {
+        btn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+        `;
+    }
+};
+
+// Exportar globalmente
+window.renderMediaThumbnail = renderMediaThumbnail;
+window.renderMediaFull = renderMediaFull;
+
 const archiveManager = {
     currentView: 'list',
     currentTab: 'entries', // entries, favorites, collections
@@ -11,6 +156,7 @@ const archiveManager = {
     selectedMoods: [],
     filteredEntries: [],
     currentCalendarDate: new Date(),
+    isInsideCollection: false, // Nueva variable para controlar si estamos dentro de una colección
     
     // Paginación
     itemsPerPage: 20,
@@ -54,11 +200,45 @@ const archiveManager = {
     // Cambiar tab
     async switchTab(tabName) {
         this.currentTab = tabName;
+        this.isInsideCollection = false; // Resetear cuando cambiamos de tab
         
         // Actualizar UI de tabs
         document.querySelectorAll('.archive-tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.tab === tabName);
         });
+        
+        // Mostrar/ocultar botón de crear colección
+        const createCollectionBtn = document.getElementById('createCollectionBtn');
+        if (createCollectionBtn) {
+            if (tabName === 'collections' && window.currentUser && !this.isInsideCollection) {
+                createCollectionBtn.style.display = 'flex';
+            } else {
+                createCollectionBtn.style.display = 'none';
+            }
+        }
+        
+        // Mostrar/ocultar controles de filtros y vistas según la pestaña
+        const archiveFilters = document.querySelector('.archive-filters');
+        if (archiveFilters) {
+            if (tabName === 'entries') {
+                // En "Mis Entradas" mostrar todos los controles
+                archiveFilters.style.display = 'flex';
+            } else {
+                // En otras pestañas ocultar filtros y vistas
+                archiveFilters.style.display = 'none';
+            }
+        }
+        
+        // Limpiar búsqueda al cambiar de pestaña
+        const searchInput = document.getElementById('archiveSearchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        if (searchInput) {
+            searchInput.value = '';
+            this.searchQuery = '';
+            if (clearSearchBtn) {
+                clearSearchBtn.style.display = 'none';
+            }
+        }
         
         // Resetear filtros y paginación
         this.currentPage = 1;
@@ -92,13 +272,22 @@ const archiveManager = {
         // Mostrar skeleton
         archiveList.innerHTML = SkeletonUtils.archiveSkeleton(6);
         
-        const favorites = await window.loadFavorites();
+        let favorites = await window.loadFavorites();
+        
+        // Aplicar búsqueda si existe
+        if (this.searchQuery) {
+            favorites = favorites.filter(fav => {
+                const entry = fav.entry;
+                const searchText = `${entry.title || ''} ${entry.text} ${entry.username}`.toLowerCase();
+                return searchText.includes(this.searchQuery);
+            });
+        }
         
         if (favorites.length === 0) {
             archiveList.innerHTML = `
                 <div class="archive-empty">
-                    <p>No tienes favoritos guardados</p>
-                    <p style="margin-top: 0.75rem; opacity: 0.6;">Explora el feed público y marca tus entradas favoritas</p>
+                    <p>${this.searchQuery ? 'No se encontraron favoritos con esa búsqueda' : 'No tienes favoritos guardados'}</p>
+                    ${!this.searchQuery ? '<p style="margin-top: 0.75rem; opacity: 0.6;">Explora el feed público y marca tus entradas favoritas</p>' : ''}
                 </div>
             `;
             return;
@@ -111,7 +300,7 @@ const archiveManager = {
             
             return `
                 <div class="archive-entry" onclick="viewPublicEntry('${entry.id}')">
-                    ${entry.image ? `<img src="${entry.image.thumbnail || entry.image.url}" alt="${entry.image.alt || ''}" class="archive-entry-image">` : ''}
+                    ${renderMediaThumbnail(entry.image)}
                     <div class="archive-entry-content">
                         <div class="archive-entry-header">
                             <span class="archive-entry-mood">${getMoodIcon(entry.mood)}</span>
@@ -131,26 +320,144 @@ const archiveManager = {
         archiveList.innerHTML = html;
     },
 
-    // Renderizar colecciones (placeholder por ahora)
-    renderCollections() {
+    // Renderizar colecciones
+    async renderCollections() {
         const archiveList = document.getElementById('archiveList');
+        const privateEntries = currentState.entries.filter(e => e.isPrivate && !e.isArchived);
+        const privatePin = localStorage.getItem('wallapic_private_pin');
+        
+        // Mostrar skeleton mientras carga
         archiveList.innerHTML = `
-            <div class="archive-empty">
-                <p>Sistema de colecciones</p>
-                <p style="margin-top: 0.75rem; opacity: 0.6;">Próximamente podrás organizar tus entradas en colecciones personalizadas</p>
+            <div class="collections-container">
+                <div class="skeleton-folder"></div>
+                <div class="skeleton-folder"></div>
             </div>
         `;
+        
+        // Cargar colecciones personalizadas
+        let customCollections = [];
+        if (window.currentUser && window.storageManager.loadCollections) {
+            try {
+                customCollections = await window.storageManager.loadCollections();
+            } catch (error) {
+                console.error('Error cargando colecciones:', error);
+            }
+        }
+        
+        // Aplicar búsqueda si existe
+        if (this.searchQuery) {
+            customCollections = customCollections.filter(collection => {
+                const searchText = `${collection.name} ${collection.description || ''}`.toLowerCase();
+                return searchText.includes(this.searchQuery);
+            });
+        }
+        
+        // Renderizar carpetas
+        let html = `<div class="collections-container">`;
+        
+        // Solo mostrar carpeta privada si no hay búsqueda o si coincide
+        if (!this.searchQuery || 'privada'.includes(this.searchQuery)) {
+            html += `
+                <!-- Carpeta Privada (built-in) -->
+                <div class="collection-folder" onclick="archiveManager.${privatePin ? 'openPrivateCollection()' : 'setPrivatePin()'}">
+                    <div class="folder-tab">
+                        <div class="folder-lock">🔒</div>
+                    </div>
+                    <div class="folder-body">
+                        <div class="folder-content">
+                            <div class="folder-header">
+                                <div class="folder-title">Privada</div>
+                                ${privatePin ? `
+                                    <button class="folder-options-btn" onclick="event.stopPropagation(); archiveManager.showPrivateOptions(event)" data-tooltip="Opciones">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="1"></circle>
+                                            <circle cx="12" cy="5" r="1"></circle>
+                                            <circle cx="12" cy="19" r="1"></circle>
+                                        </svg>
+                                    </button>
+                                ` : ''}
+                            </div>
+                            <div class="folder-count">${privateEntries.length} entrada${privateEntries.length !== 1 ? 's' : ''}</div>
+                            <div class="folder-status">
+                                ${privatePin 
+                                    ? '<span style="color: #10b981; font-size: 0.85rem;">✓ Protegida</span>' 
+                                    : '<span style="color: #fbbf24; font-size: 0.85rem;">⚠ Sin PIN</span>'
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Renderizar colecciones personalizadas
+        if (window.currentUser) {
+            customCollections.forEach(collection => {
+                html += `
+                    <div class="collection-folder" onclick="archiveManager.openCollection('${collection.id}', '${collection.name.replace(/'/g, "\\'")}')">
+                        <div class="folder-tab">
+                            <div class="folder-icon">📁</div>
+                        </div>
+                        <div class="folder-body">
+                            <div class="folder-content">
+                                <div class="folder-header">
+                                    <div class="folder-title">${collection.name}</div>
+                                    <button class="folder-options-btn" onclick="event.stopPropagation(); archiveManager.showCollectionOptions(event, '${collection.id}', '${collection.name.replace(/'/g, "\\'")}', ${collection.entryCount})" data-tooltip="Opciones">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="1"></circle>
+                                            <circle cx="12" cy="5" r="1"></circle>
+                                            <circle cx="12" cy="19" r="1"></circle>
+                                        </svg>
+                                    </button>
+                                </div>
+                                ${collection.description ? `<div class="folder-description">${collection.description}</div>` : ''}
+                                <div class="folder-count">${collection.entryCount} entrada${collection.entryCount !== 1 ? 's' : ''}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        html += `</div>`;
+        
+        // Mostrar mensaje si no hay resultados
+        if (this.searchQuery && customCollections.length === 0 && !('privada'.includes(this.searchQuery))) {
+            html += `
+                <div class="archive-empty" style="margin-top: 2rem;">
+                    <p>No se encontraron colecciones con esa búsqueda</p>
+                </div>
+            `;
+        }
+        
+        if (!window.currentUser) {
+            html += `
+                <div class="archive-empty" style="margin-top: 2rem;">
+                    <p>Inicia sesión para crear colecciones personalizadas</p>
+                </div>
+            `;
+        }
+        
+        archiveList.innerHTML = html;
     },
 
     // Renderizar archivados
     renderArchived() {
         const archiveList = document.getElementById('archiveList');
-        const archivedEntries = currentState.entries.filter(e => e.isArchived);
+        let archivedEntries = currentState.entries.filter(e => e.isArchived);
+        
+        // Aplicar búsqueda si existe
+        if (this.searchQuery) {
+            archivedEntries = archivedEntries.filter(entry => {
+                const searchText = `${entry.title || ''} ${entry.text}`.toLowerCase();
+                return searchText.includes(this.searchQuery);
+            });
+        }
         
         if (archivedEntries.length === 0) {
             archiveList.innerHTML = `
                 <div class="archive-empty">
-                    <p>No tienes entradas archivadas</p>
+                    <p>${this.searchQuery ? 'No se encontraron entradas archivadas con esa búsqueda' : 'No tienes entradas archivadas'}</p>
                 </div>
             `;
             return;
@@ -165,7 +472,7 @@ const archiveManager = {
             
             return `
                 <div class="archive-entry" onclick="viewEntry('${entry.id}', 'archived')">
-                    ${entry.image ? `<img src="${entry.image.thumbnail || entry.image.url}" alt="${entry.image.alt || ''}" class="archive-entry-image">` : ''}
+                    ${renderMediaThumbnail(entry.image)}
                     <div class="archive-entry-content">
                         <div class="archive-entry-header">
                             <span class="archive-entry-mood">${getMoodIcon(entry.mood)}</span>
@@ -193,7 +500,18 @@ const archiveManager = {
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 this.searchQuery = e.target.value.toLowerCase();
-                this.filterAndRender();
+                
+                // Renderizar según la pestaña activa
+                if (this.currentTab === 'entries') {
+                    this.filterAndRender();
+                } else if (this.currentTab === 'favorites') {
+                    this.renderFavorites();
+                } else if (this.currentTab === 'archived') {
+                    this.renderArchived();
+                } else if (this.currentTab === 'collections') {
+                    this.renderCollections();
+                }
+                
                 clearSearchBtn.style.display = this.searchQuery ? 'flex' : 'none';
             });
         }
@@ -202,7 +520,18 @@ const archiveManager = {
             clearSearchBtn.addEventListener('click', () => {
                 searchInput.value = '';
                 this.searchQuery = '';
-                this.filterAndRender();
+                
+                // Renderizar según la pestaña activa
+                if (this.currentTab === 'entries') {
+                    this.filterAndRender();
+                } else if (this.currentTab === 'favorites') {
+                    this.renderFavorites();
+                } else if (this.currentTab === 'archived') {
+                    this.renderArchived();
+                } else if (this.currentTab === 'collections') {
+                    this.renderCollections();
+                }
+                
                 clearSearchBtn.style.display = 'none';
             });
         }
@@ -411,8 +740,8 @@ const archiveManager = {
     },
 
     // Filtrar y renderizar
-    filterAndRender() {
-        this.filteredEntries = this.filterEntries();
+    async filterAndRender() {
+        this.filteredEntries = await this.filterEntries();
         this.currentPage = 1; // Resetear paginación
         this.displayedEntries = [];
         this.render();
@@ -442,22 +771,59 @@ const archiveManager = {
     },
 
     // Filtrar entradas
-    filterEntries() {
+    async filterEntries() {
         let entries = [...currentState.entries];
 
-        // Excluir archivadas (solo mostrar activas en tab "Mis Entradas")
-        entries = entries.filter(entry => !entry.isArchived);
-
-        // Filtro por búsqueda
+        // Si hay búsqueda activa, incluir TODAS las entradas (búsqueda global)
         if (this.searchQuery) {
+            // Incluir todas: activas, archivadas y privadas
+            entries = entries.map(entry => {
+                // Agregar metadata sobre ubicación
+                const entryWithLocation = {
+                    ...entry,
+                    locationBadges: []
+                };
+                
+                // Determinar ubicación
+                if (entry.isPrivate) {
+                    entryWithLocation.locationBadges.push('PRIVADA');
+                }
+                if (entry.isArchived) {
+                    entryWithLocation.locationBadges.push('Archivados');
+                }
+                
+                return entryWithLocation;
+            });
+            
+            // Filtrar por búsqueda
             entries = entries.filter(entry => {
                 const searchText = `${entry.title || ''} ${entry.text}`.toLowerCase();
                 return searchText.includes(this.searchQuery);
             });
+            
+            // Cargar colecciones para etiquetar entradas que están en colecciones
+            if (window.currentUser && window.storageManager.getEntryCollections) {
+                for (let entry of entries) {
+                    if (entry.supabaseId && !entry.isPrivate) {
+                        try {
+                            const collections = await window.storageManager.getEntryCollections(entry.supabaseId);
+                            if (collections && collections.length > 0) {
+                                // Agregar nombre de primera colección
+                                entry.locationBadges.push(`Col: ${collections[0].name}`);
+                            }
+                        } catch (error) {
+                            console.error('Error obteniendo colecciones:', error);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Sin búsqueda: solo mostrar activas no privadas (comportamiento normal)
+            entries = entries.filter(entry => !entry.isArchived && !entry.isPrivate);
         }
 
-        // Filtro por mood
-        if (this.selectedMoods.length > 0) {
+        // Filtro por mood (solo si no es búsqueda global)
+        if (this.selectedMoods.length > 0 && !this.searchQuery) {
             entries = entries.filter(entry => this.selectedMoods.includes(entry.mood));
         }
 
@@ -551,56 +917,123 @@ const archiveManager = {
 
     // Renderizar un item de lista
     renderListItem(entry) {
+        // Si es entrada privada, mostrar versión censurada
+        if (entry.isPrivate && !entry.locationBadges) {
+            // Entrada privada normal (no es búsqueda global)
+            return '';
+        }
+        
+        const isPrivateInSearch = entry.isPrivate && entry.locationBadges;
+        const clickHandler = isPrivateInSearch 
+            ? `archiveManager.openPrivateEntry('${entry.id}')`
+            : `viewEntry('${entry.id}')`;
+        
+        // Badges de ubicación
+        let badgesHTML = '';
+        if (entry.locationBadges && entry.locationBadges.length > 0) {
+            badgesHTML = entry.locationBadges.map(badge => {
+                const badgeClass = badge === 'PRIVADA' ? 'location-badge-private' : 
+                                   badge === 'Archivados' ? 'location-badge-archived' : 
+                                   'location-badge-collection';
+                return `<span class="location-badge ${badgeClass}">${badge}</span>`;
+            }).join('');
+        }
+        
         return `
             <div class="archive-entry">
-                <div class="archive-entry-clickable" onclick="viewEntry('${entry.id}')">
-                    ${entry.image ? `<img src="${entry.image.thumbnail || entry.image.url}" alt="${entry.image.alt || 'Imagen'}" class="archive-entry-image">` : ''}
+                <div class="archive-entry-clickable" onclick="${clickHandler}">
+                    ${!isPrivateInSearch ? renderMediaThumbnail(entry.image) : ''}
+                    ${isPrivateInSearch ? `<div class="archive-entry-private-placeholder">🔒</div>` : ''}
                     <div class="archive-entry-content">
                         <div class="archive-entry-header">
                             <span class="archive-entry-mood">${getMoodIcon(entry.mood)}</span>
                             <span class="archive-entry-date">${formatDate(entry.date)}</span>
+                            ${badgesHTML}
                         </div>
-                        ${entry.title ? `<div class="archive-entry-title">${entry.title}</div>` : ''}
-                        <div class="archive-entry-preview">${this.getPreviewText(entry)}</div>
-                        <div class="archive-entry-stats">
-                            <span>${entry.wordCount} palabras</span>
-                            <span>${entry.charCount} caracteres</span>
-                        </div>
+                        ${!isPrivateInSearch && entry.title ? `<div class="archive-entry-title">${entry.title}</div>` : ''}
+                        ${isPrivateInSearch ? `<div class="archive-entry-preview" style="opacity: 0.5; font-style: italic;">Entrada privada - Requiere PIN</div>` : `<div class="archive-entry-preview">${this.getPreviewText(entry)}</div>`}
+                        ${!isPrivateInSearch ? `
+                            <div class="archive-entry-stats">
+                                <span>${entry.wordCount} palabras</span>
+                                <span>${entry.charCount} caracteres</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
                 <div class="archive-entry-actions">
-                    <button class="archive-action-btn" onclick="event.stopPropagation(); archiveManager.shareEntry('${entry.id}')" title="Compartir enlace">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="18" cy="5" r="3"></circle>
-                            <circle cx="6" cy="12" r="3"></circle>
-                            <circle cx="18" cy="19" r="3"></circle>
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-                        </svg>
-                    </button>
-                    <button class="archive-action-btn ${entry.isPublic ? 'is-public' : ''}" 
-                            onclick="event.stopPropagation(); archiveManager.togglePublic('${entry.id}')" 
-                            title="${entry.isPublic ? 'Hacer privada' : 'Hacer pública'}">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            ${entry.isPublic 
-                                ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>' 
-                                : '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'}
-                        </svg>
-                    </button>
-                    <button class="archive-action-btn archive-action-delete" 
-                            onclick="event.stopPropagation(); archiveManager.deleteEntry('${entry.id}')" 
-                            title="Eliminar">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                    </button>
+                    ${window.currentUser && entry.supabaseId && !isPrivateInSearch ? `
+                        <button class="archive-action-btn" onclick="event.stopPropagation(); archiveManager.moveToCollection('${entry.id}')" data-tooltip="Mover a colección">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                        </button>
+                    ` : ''}
+                    ${!isPrivateInSearch ? `
+                        <button class="archive-action-btn" onclick="event.stopPropagation(); archiveManager.shareEntry('${entry.id}')" data-tooltip="Compartir enlace">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="18" cy="5" r="3"></circle>
+                                <circle cx="6" cy="12" r="3"></circle>
+                                <circle cx="18" cy="19" r="3"></circle>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                            </svg>
+                        </button>
+                        ${!entry.isPublic ? `
+                            <button class="archive-action-btn ${entry.isPrivate ? 'is-private' : ''}" 
+                                    onclick="event.stopPropagation(); archiveManager.togglePrivate('${entry.id}')" 
+                                    data-tooltip="${entry.isPrivate ? 'Quitar de colección privada' : 'Mover a colección privada'}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    ${entry.isPrivate 
+                                        ? '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path>' 
+                                        : '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>'}
+                                </svg>
+                            </button>
+                        ` : ''}
+                        <button class="archive-action-btn ${entry.isPublic ? 'is-public' : ''}" 
+                                onclick="event.stopPropagation(); archiveManager.togglePublic('${entry.id}')" 
+                                data-tooltip="${entry.isPublic ? 'Hacer privada' : 'Hacer pública'}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                ${entry.isPublic 
+                                    ? '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>' 
+                                    : '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'}
+                            </svg>
+                        </button>
+                        ${!entry.isArchived ? `
+                            <button class="archive-action-btn" 
+                                    onclick="event.stopPropagation(); archiveManager.archiveEntry('${entry.id}')" 
+                                    data-tooltip="Archivar">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                                    <rect x="1" y="3" width="22" height="5"></rect>
+                                    <line x1="10" y1="12" x2="14" y2="12"></line>
+                                </svg>
+                            </button>
+                        ` : `
+                            <button class="archive-action-btn" 
+                                    onclick="event.stopPropagation(); archiveManager.unarchiveEntry('${entry.id}')" 
+                                    data-tooltip="Desarchivar">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                                    <rect x="1" y="3" width="22" height="5"></rect>
+                                    <polyline points="10 12 12 10 14 12"></polyline>
+                                </svg>
+                            </button>
+                        `}
+                        <button class="archive-action-btn archive-action-delete" 
+                                onclick="event.stopPropagation(); archiveManager.deleteEntry('${entry.id}')" 
+                                data-tooltip="Eliminar">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    ` : ''}
                 </div>
             </div>
         `;
     },
 
-    // Agregar items de lista (para infinite scroll)
+    // Obtener texto de preview    // Agregar items de lista (para infinite scroll)
     appendListItems(entries) {
         const container = document.getElementById('archiveListContainer');
         if (!container) return;
@@ -679,8 +1112,8 @@ const archiveManager = {
         const daysInMonth = lastDay.getDate();
         const startingDayOfWeek = firstDay.getDay();
 
-        // Usar TODAS las entradas (no filtradas) para calendario completo
-        const allEntries = currentState.entries.filter(e => !e.isArchived);
+        // Usar entradas NO archivadas NI privadas para calendario
+        const allEntries = currentState.entries.filter(e => !e.isArchived && !e.isPrivate);
         
         // Obtener entradas del mes actual
         const entriesInMonth = allEntries.filter(entry => {
@@ -766,8 +1199,8 @@ const archiveManager = {
         const archiveList = document.getElementById('archiveList');
         if (!archiveList) return;
         
-        // Usar TODAS las entradas (no archivadas)
-        const allEntries = currentState.entries.filter(e => !e.isArchived);
+        // Usar entradas NO archivadas NI privadas
+        const allEntries = currentState.entries.filter(e => !e.isArchived && !e.isPrivate);
         
         // HOY
         const today = new Date();
@@ -864,7 +1297,7 @@ const archiveManager = {
                 heatmapHTML += `
                     <div class="heatmap-cell level-${level} ${isToday ? 'today' : ''}" 
                          style="background: ${bgColor}; border: 1px solid ${borderColor};"
-                         title="${formattedDate}: ${count} entrada${count !== 1 ? 's' : ''}${isToday ? ' (HOY)' : ''}"
+                         data-tooltip="${formattedDate}: ${count} entrada${count !== 1 ? 's' : ''}${isToday ? ' (HOY)' : ''}"
                          ${count > 0 && !isFuture ? `onclick="archiveManager.showDateEntries('${dateKey}')"` : ''}>
                     </div>
                 `;
@@ -916,8 +1349,8 @@ const archiveManager = {
 
     // Mostrar entradas de un día específico
     showDayEntries(day, month, year) {
-        // Usar currentState.entries no archivadas en lugar de filteredEntries
-        const allNonArchivedEntries = currentState.entries.filter(e => !e.isArchived);
+        // Usar currentState.entries no archivadas NI privadas
+        const allNonArchivedEntries = currentState.entries.filter(e => !e.isArchived && !e.isPrivate);
         const entries = allNonArchivedEntries.filter(entry => {
             // Extraer solo la fecha sin conversión de zona horaria
             const [datePart] = entry.date.split('T');
@@ -946,8 +1379,8 @@ const archiveManager = {
 
     // Mostrar entradas de una fecha específica (desde heatmap)
     showDateEntries(dateStr) {
-        // Usar currentState.entries no archivadas en lugar de filteredEntries
-        const allNonArchivedEntries = currentState.entries.filter(e => !e.isArchived);
+        // Usar currentState.entries no archivadas NI privadas
+        const allNonArchivedEntries = currentState.entries.filter(e => !e.isArchived && !e.isPrivate);
         const entries = allNonArchivedEntries.filter(entry => 
             entry.date.split('T')[0] === dateStr
         );
@@ -967,8 +1400,46 @@ const archiveManager = {
     },
 
     // Compartir entrada (copiar enlace directo)
-    shareEntry(entryId) {
-        const url = `${window.location.origin}${window.location.pathname}#entry=${entryId}`;
+    async shareEntry(entryId) {
+        // Buscar la entrada para verificar si es pública o privada
+        let shareToken = null;
+        
+        try {
+            const entry = currentState.entries.find(e => e.id == entryId);
+            if (!entry) return;
+            
+            // Si la entrada NO es pública, necesitamos un token
+            if (!entry.isPublic) {
+                // Si ya tiene token, usarlo; si no, generar uno nuevo
+                if (entry.shareToken) {
+                    shareToken = entry.shareToken;
+                } else {
+                    // Generar token único
+                    shareToken = 'share_' + Math.random().toString(36).substring(2, 15) + 
+                               Math.random().toString(36).substring(2, 15) + 
+                               Date.now().toString(36);
+                    
+                    // Guardar token en la base de datos
+                    const { error: updateError } = await window.supabaseClient
+                        .from('entries')
+                        .update({ share_token: shareToken })
+                        .eq('id', entryId);
+                    
+                    if (updateError) throw updateError;
+                    
+                    // Actualizar en el estado local
+                    entry.shareToken = shareToken;
+                }
+            }
+        } catch (error) {
+            console.error('Error al preparar enlace compartido:', error);
+            // Continuar sin token si hay error
+        }
+        
+        // Construir URL con o sin token
+        const url = shareToken 
+            ? `${window.location.origin}${window.location.pathname}#entry=${entryId}&token=${shareToken}`
+            : `${window.location.origin}${window.location.pathname}#entry=${entryId}`;
         
         // Copiar al portapapeles
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1009,21 +1480,38 @@ const archiveManager = {
 
         const willBePublic = !entry.isPublic;
         
+        // Si se hace pública, no puede estar en colección privada
+        if (willBePublic && entry.isPrivate) {
+            entry.isPrivate = false;
+        }
+        
         try {
             // Si hay sesión y supabaseId, usar makeEntryPublic/makeEntryPrivate
             if (window.currentUser && entry.supabaseId) {
                 if (willBePublic) {
                     await window.storageManager.makeEntryPublic(entry.id, entry.supabaseId);
+                    // También actualizar is_private si se hace pública
+                    if (entry.isPrivate) {
+                        await window.storageManager.updateEntryFields(entry.id, entry.supabaseId, {
+                            is_private: false
+                        });
+                    }
                 } else {
                     await window.storageManager.makeEntryPrivate(entry.id, entry.supabaseId);
                 }
             } else {
                 // Sin sesión, actualizar en localStorage
                 entry.isPublic = willBePublic;
+                if (willBePublic) {
+                    entry.isPrivate = false;
+                }
                 const entries = JSON.parse(localStorage.getItem('wallapic_entries') || '[]');
                 const index = entries.findIndex(e => e.id == entryId);
                 if (index !== -1) {
                     entries[index].isPublic = willBePublic;
+                    if (willBePublic) {
+                        entries[index].isPrivate = false;
+                    }
                     localStorage.setItem('wallapic_entries', JSON.stringify(entries));
                 }
             }
@@ -1032,6 +1520,9 @@ const archiveManager = {
             const index = currentState.entries.findIndex(e => e.id == entryId);
             if (index !== -1) {
                 currentState.entries[index].isPublic = willBePublic;
+                if (willBePublic) {
+                    currentState.entries[index].isPrivate = false;
+                }
             }
 
             // Mostrar mensaje
@@ -1056,6 +1547,17 @@ const archiveManager = {
         try {
             const entry = currentState.entries.find(e => e.id == entryId);
             
+            // Si la entrada tiene imagen del banco, liberarla
+            if (entry?.image?.source === 'user_bank' && entry?.image?.bankImageId) {
+                try {
+                    await window.imageBankInstance.unmarkImageAsUsed(entry.image.bankImageId);
+                    console.log('✅ Imagen del banco liberada');
+                } catch (error) {
+                    console.error('⚠️ Error liberando imagen del banco:', error);
+                    // Continuar con la eliminación aunque falle esto
+                }
+            }
+            
             // Eliminar usando storage manager
             await window.storageManager.deleteEntry(entryId, entry?.supabaseId);
 
@@ -1070,12 +1572,782 @@ const archiveManager = {
             console.error('Error al eliminar entrada:', error);
             showToast('Error al eliminar la entrada', 'error');
         }
+    },
+
+    // ============================================
+    // SISTEMA DE COLECCIÓN PRIVADA
+    // ============================================
+
+    // Toggle entrada privada
+    async togglePrivate(entryId) {
+        const entry = currentState.entries.find(e => e.id == entryId);
+        if (!entry) return;
+        
+        // No se puede mover a privada si es pública
+        if (entry.isPublic && !entry.isPrivate) {
+            showToast('No puedes mover una entrada pública a la colección privada', 'warning');
+            return;
+        }
+
+        // Si no hay PIN configurado, pedir configurarlo primero
+        const privatePin = localStorage.getItem('wallapic_private_pin');
+        if (!privatePin && !entry.isPrivate) {
+            showToast('Primero configura un PIN para tu colección privada', 'warning');
+            this.switchTab('collections');
+            return;
+        }
+
+        const willBePrivate = !entry.isPrivate;
+
+        try {
+            // Actualizar campo isPrivate
+            entry.isPrivate = willBePrivate;
+            
+            // Guardar en storage
+            if (window.currentUser && entry.supabaseId) {
+                await window.storageManager.updateEntryFields(entry.id, entry.supabaseId, {
+                    is_private: willBePrivate
+                });
+            } else {
+                const entries = JSON.parse(localStorage.getItem('wallapic_entries') || '[]');
+                const index = entries.findIndex(e => e.id == entryId);
+                if (index !== -1) {
+                    entries[index].isPrivate = willBePrivate;
+                    localStorage.setItem('wallapic_entries', JSON.stringify(entries));
+                }
+            }
+
+            // Actualizar estado local
+            const index = currentState.entries.findIndex(e => e.id == entryId);
+            if (index !== -1) {
+                currentState.entries[index].isPrivate = willBePrivate;
+            }
+
+            showToast(
+                willBePrivate ? '🔒 Movido a colección privada' : 'Quitado de colección privada',
+                'success'
+            );
+
+            this.filterAndRender();
+        } catch (error) {
+            console.error('Error al cambiar privacidad:', error);
+            showToast('Error al cambiar privacidad', 'error');
+        }
+    },
+
+    // Configurar PIN de colección privada
+    async setPrivatePin() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'privatePinModal';
+        modal.style.cssText = 'display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 2000;';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 360px; width: 90%; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border);">
+                <div class="modal-header" style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                    <h2 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);">🔒 Configurar PIN</h2>
+                    <button class="modal-close" onclick="document.getElementById('privatePinModal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; padding: 0;">×</button>
+                </div>
+                <div class="modal-body" style="padding: 1.25rem;">
+                    <p style="margin: 0 0 1.25rem 0; opacity: 0.7; color: var(--text-primary); font-size: 0.9rem; line-height: 1.4;">
+                        Crea un PIN de 4 dígitos para proteger tu colección privada
+                    </p>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.9rem;">PIN</label>
+                            <input type="password" id="privatePin1" maxlength="4" 
+                                   placeholder="••••" 
+                                   style="width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--overlay-light); color: var(--text-primary); font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; font-family: monospace; box-sizing: border-box;"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.9rem;">Confirmar PIN</label>
+                            <input type="password" id="privatePin2" maxlength="4" 
+                                   placeholder="••••" 
+                                   style="width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--overlay-light); color: var(--text-primary); font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; font-family: monospace; box-sizing: border-box;"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 1rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button onclick="document.getElementById('privatePinModal').remove()" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--overlay-light); border: 1px solid var(--border); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; font-weight: 500; font-family: inherit; transition: all 0.2s;">Cancelar</button>
+                    <button onclick="archiveManager.confirmSetPin()" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--accent); border: 1px solid var(--accent); color: #000; cursor: pointer; font-size: 0.9rem; font-weight: 600; font-family: inherit; transition: all 0.2s;">Guardar PIN</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Focus en primer input
+        setTimeout(() => document.getElementById('privatePin1').focus(), 100);
+    },
+
+    // Confirmar PIN
+    confirmSetPin() {
+        const pin1 = document.getElementById('privatePin1').value;
+        const pin2 = document.getElementById('privatePin2').value;
+
+        if (pin1.length !== 4) {
+            showToast('El PIN debe tener 4 dígitos', 'warning');
+            return;
+        }
+
+        if (pin1 !== pin2) {
+            showToast('Los PINs no coinciden', 'error');
+            return;
+        }
+
+        localStorage.setItem('wallapic_private_pin', pin1);
+        showToast('✅ PIN configurado correctamente', 'success');
+        
+        // Cerrar modal específico
+        const modal = document.getElementById('privatePinModal');
+        if (modal) modal.remove();
+        
+        this.renderCollections();
+    },
+
+    // Abrir colección privada
+    async openPrivateCollection() {
+        const storedPin = localStorage.getItem('wallapic_private_pin');
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'privateAccessModal';
+        modal.style.cssText = 'display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 2000;';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 360px; width: 90%; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border);">
+                <div class="modal-header" style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                    <h2 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);">🔒 Colección Privada</h2>
+                    <button class="modal-close" onclick="document.getElementById('privateAccessModal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; padding: 0;">×</button>
+                </div>
+                <div class="modal-body" style="padding: 1.25rem;">
+                    <p style="margin: 0 0 1.25rem 0; opacity: 0.7; text-align: center; color: var(--text-primary); font-size: 0.9rem; line-height: 1.4;">
+                        Ingresa tu PIN para acceder
+                    </p>
+                    <div>
+                        <input type="password" id="privatePinInput" maxlength="4" 
+                               placeholder="••••" 
+                               style="width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--overlay-light); color: var(--text-primary); font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; font-family: monospace; box-sizing: border-box;"
+                               oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)"
+                               onkeypress="if(event.key === 'Enter') archiveManager.verifyPinAndOpen()">
+                    </div>
+                    <p id="pinError" style="color: #ef4444; margin: 0.5rem 0 0 0; font-size: 0.85rem; text-align: center; display: none;">
+                        PIN incorrecto
+                    </p>
+                </div>
+                <div class="modal-footer" style="padding: 1rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button onclick="document.getElementById('privateAccessModal').remove()" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--overlay-light); border: 1px solid var(--border); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; font-weight: 500; font-family: inherit; transition: all 0.2s;">Cancelar</button>
+                    <button onclick="archiveManager.verifyPinAndOpen()" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--accent); border: 1px solid var(--accent); color: #000; cursor: pointer; font-size: 0.9rem; font-weight: 600; font-family: inherit; transition: all 0.2s;">Abrir</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        setTimeout(() => document.getElementById('privatePinInput').focus(), 100);
+    },
+
+    // Verificar PIN y abrir colección
+    verifyPinAndOpen() {
+        const input = document.getElementById('privatePinInput').value;
+        const storedPin = localStorage.getItem('wallapic_private_pin');
+        const errorMsg = document.getElementById('pinError');
+
+        if (input === storedPin) {
+            // Cerrar modal específico
+            const modal = document.getElementById('privateAccessModal');
+            if (modal) modal.remove();
+            // Mostrar entradas privadas
+            this.showPrivateEntries();
+        } else {
+            errorMsg.style.display = 'block';
+            document.getElementById('privatePinInput').value = '';
+            document.getElementById('privatePinInput').focus();
+        }
+    },
+
+    // Mostrar entradas privadas
+    showPrivateEntries() {
+        this.isInsideCollection = true; // Marcar que estamos dentro de una colección
+        
+        // Ocultar botón de nueva colección
+        const createCollectionBtn = document.getElementById('createCollectionBtn');
+        if (createCollectionBtn) {
+            createCollectionBtn.style.display = 'none';
+        }
+        
+        const archiveList = document.getElementById('archiveList');
+        const privateEntries = currentState.entries.filter(e => e.isPrivate && !e.isArchived);
+        
+        if (privateEntries.length === 0) {
+            archiveList.innerHTML = `
+                <div class="private-collection-header">
+                    <button class="btn-back" onclick="archiveManager.switchTab('collections')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        </svg>
+                        Volver
+                    </button>
+                    <h2>🔒 Colección Privada</h2>
+                </div>
+                <div class="archive-empty">
+                    <p>No tienes entradas en tu colección privada</p>
+                    <p style="margin-top: 0.75rem; opacity: 0.6;">Usa el botón 🔒 en tus entradas para moverlas aquí</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Ordenar por fecha (más recientes primero)
+        privateEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        const html = `
+            <div class="private-collection-header">
+                <button class="btn-back" onclick="archiveManager.switchTab('collections')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    Volver
+                </button>
+                <h2>🔒 Colección Privada</h2>
+            </div>
+            <div class="archive-count">Total de entradas privadas: ${privateEntries.length}</div>
+            <div class="archive-list">
+                ${privateEntries.map(entry => this.renderPrivateItem(entry)).join('')}
+            </div>
+        `;
+
+        archiveList.innerHTML = html;
+    },
+
+    // Renderizar item privado
+    renderPrivateItem(entry) {
+        return `
+            <div class="archive-entry">
+                <div class="archive-entry-clickable" onclick="viewEntry('${entry.id}')">
+                    ${renderMediaThumbnail(entry.image)}
+                    <div class="archive-entry-content">
+                        <div class="archive-entry-header">
+                            <span class="archive-entry-mood">${getMoodIcon(entry.mood)}</span>
+                            <span class="archive-entry-date">${formatDate(entry.date)}</span>
+                            <span style="margin-left: 0.5rem; color: var(--accent);">🔒 Privada</span>
+                        </div>
+                        ${entry.title ? `<div class="archive-entry-title">${entry.title}</div>` : ''}
+                        <div class="archive-entry-preview">${this.getPreviewText(entry)}</div>
+                        <div class="archive-entry-stats">
+                            <span>${entry.wordCount} palabras</span>
+                            <span>${entry.charCount} caracteres</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="archive-entry-actions">
+                    <button class="archive-action-btn is-private" 
+                            onclick="event.stopPropagation(); archiveManager.togglePrivate('${entry.id}')" 
+                            data-tooltip="Quitar de colección privada">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                        </svg>
+                    </button>
+                    <button class="archive-action-btn archive-action-delete" 
+                            onclick="event.stopPropagation(); archiveManager.deleteEntry('${entry.id}')" 
+                            data-tooltip="Eliminar">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    // Mostrar opciones de colección privada
+    showPrivateOptions(event) {
+        event.stopPropagation();
+        
+        const dropdown = document.createElement('div');
+        dropdown.className = 'context-menu';
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = event.clientY + 'px';
+        dropdown.style.left = event.clientX + 'px';
+        dropdown.innerHTML = `
+            <button onclick="archiveManager.changePrivatePin(); this.closest('.context-menu').remove();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                Cambiar PIN
+            </button>
+        `;
+        
+        document.body.appendChild(dropdown);
+        
+        // Cerrar al hacer click fuera
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!dropdown.contains(e.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 10);
+    },
+
+    // Cambiar PIN de colección privada
+    async changePrivatePin() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'changePrivatePinModal';
+        modal.style.cssText = 'display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 2000;';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 360px; width: 90%; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border);">
+                <div class="modal-header" style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                    <h2 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);">🔑 Cambiar PIN</h2>
+                    <button class="modal-close" onclick="document.getElementById('changePrivatePinModal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; padding: 0;">×</button>
+                </div>
+                <div class="modal-body" style="padding: 1.25rem;">
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.9rem;">PIN actual</label>
+                            <input type="password" id="currentPin" maxlength="4" 
+                                   placeholder="••••" 
+                                   style="width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--overlay-light); color: var(--text-primary); font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; font-family: monospace; box-sizing: border-box;"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.9rem;">Nuevo PIN</label>
+                            <input type="password" id="newPin1" maxlength="4" 
+                                   placeholder="••••" 
+                                   style="width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--overlay-light); color: var(--text-primary); font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; font-family: monospace; box-sizing: border-box;"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-primary); font-size: 0.9rem;">Confirmar nuevo PIN</label>
+                            <input type="password" id="newPin2" maxlength="4" 
+                                   placeholder="••••" 
+                                   style="width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--overlay-light); color: var(--text-primary); font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; font-family: monospace; box-sizing: border-box;"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 1rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button onclick="document.getElementById('changePrivatePinModal').remove()" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--overlay-light); border: 1px solid var(--border); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; font-weight: 500; font-family: inherit; transition: all 0.2s;">Cancelar</button>
+                    <button onclick="archiveManager.confirmChangePin()" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--accent); border: 1px solid var(--accent); color: #000; cursor: pointer; font-size: 0.9rem; font-weight: 600; font-family: inherit; transition: all 0.2s;">Cambiar PIN</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        setTimeout(() => document.getElementById('currentPin').focus(), 100);
+    },
+
+    // Confirmar cambio de PIN
+    confirmChangePin() {
+        const currentPin = document.getElementById('currentPin').value;
+        const newPin1 = document.getElementById('newPin1').value;
+        const newPin2 = document.getElementById('newPin2').value;
+        const storedPin = localStorage.getItem('wallapic_private_pin');
+
+        if (currentPin !== storedPin) {
+            showToast('PIN actual incorrecto', 'error');
+            return;
+        }
+
+        if (newPin1.length !== 4) {
+            showToast('El nuevo PIN debe tener 4 dígitos', 'warning');
+            return;
+        }
+
+        if (newPin1 !== newPin2) {
+            showToast('Los nuevos PINs no coinciden', 'error');
+            return;
+        }
+
+        localStorage.setItem('wallapic_private_pin', newPin1);
+        showToast('✅ PIN cambiado correctamente', 'success');
+        
+        // Cerrar modal específico
+        const modal = document.getElementById('changePrivatePinModal');
+        if (modal) modal.remove();
+    },
+
+    // ============================================
+    // SISTEMA DE COLECCIONES PERSONALIZADAS
+    // ============================================
+
+    // Abrir modal para crear colección
+    openCreateCollectionModal() {
+        const modal = document.getElementById('createCollectionModal');
+        if (modal) {
+            modal.classList.add('active');
+            document.getElementById('collectionNameInput').value = '';
+            document.getElementById('collectionDescriptionInput').value = '';
+            setTimeout(() => document.getElementById('collectionNameInput').focus(), 100);
+        }
+    },
+
+    // Crear colección
+    async createCollection() {
+        const nameInput = document.getElementById('collectionNameInput');
+        const descriptionInput = document.getElementById('collectionDescriptionInput');
+        const name = nameInput.value.trim();
+        const description = descriptionInput.value.trim() || null;
+
+        if (!name) {
+            showToast('El nombre es obligatorio', 'warning');
+            nameInput.focus();
+            return;
+        }
+
+        if (name.length > 100) {
+            showToast('El nombre es demasiado largo (máximo 100 caracteres)', 'warning');
+            return;
+        }
+
+        try {
+            await window.storageManager.createCollection(name, description);
+            showToast('✅ Colección creada', 'success');
+            
+            // Cerrar modal
+            const modal = document.getElementById('createCollectionModal');
+            if (modal) modal.classList.remove('active');
+            
+            // Recargar vista de colecciones
+            this.renderCollections();
+        } catch (error) {
+            console.error('Error creando colección:', error);
+            if (error.message.includes('nombre')) {
+                showToast('Ya tienes una colección con ese nombre', 'error');
+            } else {
+                showToast('Error al crear la colección', 'error');
+            }
+        }
+    },
+
+    // Abrir colección personalizada
+    async openCollection(collectionId, collectionName) {
+        this.isInsideCollection = true; // Marcar que estamos dentro de una colección
+        
+        // Ocultar botón de nueva colección
+        const createCollectionBtn = document.getElementById('createCollectionBtn');
+        if (createCollectionBtn) {
+            createCollectionBtn.style.display = 'none';
+        }
+        
+        const archiveList = document.getElementById('archiveList');
+        
+        // Mostrar skeleton
+        archiveList.innerHTML = `
+            <div class="private-collection-header">
+                <button class="btn-back" onclick="archiveManager.switchTab('collections')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    Volver
+                </button>
+                <h2>📁 ${collectionName}</h2>
+            </div>
+            ${SkeletonUtils.archiveSkeleton(6)}
+        `;
+        
+        try {
+            const entries = await window.storageManager.loadCollectionEntries(collectionId);
+            
+            if (entries.length === 0) {
+                archiveList.innerHTML = `
+                    <div class="private-collection-header">
+                        <button class="btn-back" onclick="archiveManager.switchTab('collections')">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                            Volver
+                        </button>
+                        <h2>📁 ${collectionName}</h2>
+                    </div>
+                    <div class="archive-empty">
+                        <p>Esta colección está vacía</p>
+                        <p style="margin-top: 0.75rem; opacity: 0.6;">Usa el botón 📁 en tus entradas para agregarlas aquí</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = `
+                <div class="private-collection-header">
+                    <button class="btn-back" onclick="archiveManager.switchTab('collections')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        </svg>
+                        Volver
+                    </button>
+                    <h2>📁 ${collectionName}</h2>
+                </div>
+                <div class="archive-count">Total de entradas: ${entries.length}</div>
+                <div class="archive-list">
+                    ${entries.map(entry => this.renderCollectionItem(entry, collectionId)).join('')}
+                </div>
+            `;
+
+            archiveList.innerHTML = html;
+            
+        } catch (error) {
+            console.error('Error cargando entradas:', error);
+            showToast('Error al cargar las entradas', 'error');
+            this.switchTab('collections');
+        }
+    },
+
+    // Renderizar item de colección
+    renderCollectionItem(entry, collectionId) {
+        return `
+            <div class="archive-entry">
+                <div class="archive-entry-clickable" onclick="viewEntry('${entry.id}')">
+                    ${renderMediaThumbnail(entry.image)}
+                    <div class="archive-entry-content">
+                        <div class="archive-entry-header">
+                            <span class="archive-entry-mood">${getMoodIcon(entry.mood)}</span>
+                            <span class="archive-entry-date">${formatDate(entry.date)}</span>
+                        </div>
+                        ${entry.title ? `<div class="archive-entry-title">${entry.title}</div>` : ''}
+                        <div class="archive-entry-preview">${this.getPreviewText(entry)}</div>
+                        <div class="archive-entry-stats">
+                            <span>${entry.wordCount} palabras</span>
+                            <span>${entry.charCount} caracteres</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="archive-entry-actions">
+                    <button class="archive-action-btn archive-action-remove" 
+                            onclick="event.stopPropagation(); archiveManager.removeFromCollection('${entry.supabaseId}', '${collectionId}')" 
+                            data-tooltip="Quitar de colección">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    // Quitar entrada de colección
+    async removeFromCollection(entrySupabaseId, collectionId) {
+        const confirmed = await showConfirm('¿Quitar esta entrada de la colección?');
+        if (!confirmed) return;
+
+        try {
+            await window.storageManager.removeEntryFromCollection(entrySupabaseId, collectionId);
+            showToast('Entrada quitada de la colección', 'success');
+            
+            // Recargar la colección actual
+            const currentHeader = document.querySelector('.private-collection-header h2');
+            if (currentHeader) {
+                const collectionName = currentHeader.textContent.replace('📁 ', '').trim();
+                this.openCollection(collectionId, collectionName);
+            }
+        } catch (error) {
+            console.error('Error quitando entrada:', error);
+            showToast('Error al quitar la entrada', 'error');
+        }
+    },
+
+    // Mostrar opciones de colección personalizada
+    showCollectionOptions(event, collectionId, collectionName, entryCount) {
+        event.stopPropagation();
+        
+        const dropdown = document.createElement('div');
+        dropdown.className = 'context-menu';
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = event.clientY + 'px';
+        dropdown.style.left = event.clientX + 'px';
+        dropdown.innerHTML = `
+            <button onclick="archiveManager.deleteCollectionConfirm('${collectionId}', '${collectionName.replace(/'/g, "\\'")}', ${entryCount}); this.closest('.context-menu').remove();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                Eliminar colección
+            </button>
+        `;
+        
+        document.body.appendChild(dropdown);
+        
+        // Cerrar al hacer click fuera
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!dropdown.contains(e.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 10);
+    },
+
+    // Confirmar eliminación de colección
+    async deleteCollectionConfirm(collectionId, collectionName, entryCount) {
+        const message = entryCount > 0 
+            ? `¿Eliminar la colección "${collectionName}"?\n\nLas ${entryCount} entrada${entryCount !== 1 ? 's' : ''} no se eliminarán, solo se quitarán de la colección.`
+            : `¿Eliminar la colección "${collectionName}"?`;
+        
+        const confirmed = await showConfirm(message);
+        if (!confirmed) return;
+
+        try {
+            await window.storageManager.deleteCollection(collectionId);
+            showToast('Colección eliminada', 'success');
+            this.renderCollections();
+        } catch (error) {
+            console.error('Error eliminando colección:', error);
+            showToast('Error al eliminar la colección', 'error');
+        }
+    },
+
+    // Mover entrada a colección (modal selector)
+    async moveToCollection(entryId) {
+        const entry = currentState.entries.find(e => e.id == entryId);
+        if (!entry || !entry.supabaseId) {
+            showToast('Esta entrada no se puede agregar a colecciones', 'warning');
+            return;
+        }
+
+        // Cargar colecciones disponibles
+        const collections = await window.storageManager.loadCollections();
+        
+        if (collections.length === 0) {
+            showToast('No tienes colecciones. Crea una primero en la pestaña Colecciones', 'info');
+            return;
+        }
+
+        // Cargar colecciones donde ya está la entrada
+        const entryCollections = await window.storageManager.getEntryCollections(entry.supabaseId);
+        const entryCollectionIds = entryCollections.map(c => c.id);
+
+        // Abrir modal selector
+        const modal = document.getElementById('selectCollectionModal');
+        if (!modal) {
+            console.error('Modal selectCollectionModal no encontrado');
+            return;
+        }
+
+        const collectionsList = document.getElementById('collectionsList');
+        collectionsList.innerHTML = collections.map(c => {
+            const isInCollection = entryCollectionIds.includes(c.id);
+            return `
+                <button class="collection-option ${isInCollection ? 'in-collection' : ''}" 
+                        onclick="archiveManager.toggleEntryInCollection('${entry.supabaseId}', '${c.id}', this)"
+                        ${isInCollection ? 'disabled' : ''}>
+                    <div class="collection-option-icon">
+                        ${isInCollection ? '✓' : '📁'}
+                    </div>
+                    <div class="collection-option-content">
+                        <div class="collection-option-name">${c.name}</div>
+                        <div class="collection-option-count">${c.entryCount} entrada${c.entryCount !== 1 ? 's' : ''}</div>
+                    </div>
+                </button>
+            `;
+        }).join('');
+
+        modal.classList.add('active');
+    },
+
+    // Toggle entrada en colección
+    async toggleEntryInCollection(entrySupabaseId, collectionId, button) {
+        try {
+            await window.storageManager.addEntryToCollection(entrySupabaseId, collectionId);
+            showToast('Entrada agregada a la colección', 'success');
+            
+            // Actualizar UI del botón
+            button.classList.add('in-collection');
+            button.disabled = true;
+            button.querySelector('.collection-option-icon').textContent = '✓';
+            
+            // Cerrar modal después de agregar
+            setTimeout(() => {
+                const modal = document.getElementById('selectCollectionModal');
+                if (modal) modal.classList.remove('active');
+            }, 600);
+            
+        } catch (error) {
+            if (error.message.includes('ya está')) {
+                showToast('Esta entrada ya está en esa colección', 'info');
+            } else {
+                console.error('Error agregando a colección:', error);
+                showToast('Error al agregar a colección', 'error');
+            }
+        }
+    },
+    
+    // Abrir entrada privada desde búsqueda (requiere PIN)
+    openPrivateEntry(entryId) {
+        const storedPin = localStorage.getItem('wallapic_private_pin');
+        
+        if (!storedPin) {
+            showToast('Primero debes configurar un PIN para la colección privada', 'warning');
+            return;
+        }
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'privateEntryAccessModal';
+        modal.style.cssText = 'display: flex; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); z-index: 2000;';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 360px; width: 90%; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border);">
+                <div class="modal-header" style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                    <h2 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);">🔒 Entrada Privada</h2>
+                    <button class="modal-close" onclick="document.getElementById('privateEntryAccessModal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; padding: 0;">×</button>
+                </div>
+                <div class="modal-body" style="padding: 1.25rem;">
+                    <p style="margin: 0 0 1.25rem 0; opacity: 0.7; text-align: center; color: var(--text-primary); font-size: 0.9rem; line-height: 1.4;">
+                        Ingresa tu PIN para ver esta entrada privada
+                    </p>
+                    <div>
+                        <input type="password" id="privateEntryPinInput" maxlength="4" 
+                               placeholder="••••" 
+                               style="width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--overlay-light); color: var(--text-primary); font-size: 1.5rem; text-align: center; letter-spacing: 0.5rem; font-family: monospace; box-sizing: border-box;"
+                               oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)"
+                               onkeypress="if(event.key === 'Enter') archiveManager.verifyPinAndOpenEntry('${entryId}')">
+                    </div>
+                    <p id="entryPinError" style="color: #ef4444; margin: 0.5rem 0 0 0; font-size: 0.85rem; text-align: center; display: none;">
+                        PIN incorrecto
+                    </p>
+                </div>
+                <div class="modal-footer" style="padding: 1rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button onclick="document.getElementById('privateEntryAccessModal').remove()" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--overlay-light); border: 1px solid var(--border); color: var(--text-primary); cursor: pointer; font-size: 0.9rem; font-weight: 500; font-family: inherit; transition: all 0.2s;">Cancelar</button>
+                    <button onclick="archiveManager.verifyPinAndOpenEntry('${entryId}')" style="padding: 0.6rem 1.25rem; border-radius: 8px; background: var(--accent); border: 1px solid var(--accent); color: #000; cursor: pointer; font-size: 0.9rem; font-weight: 600; font-family: inherit; transition: all 0.2s;">Abrir</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        setTimeout(() => document.getElementById('privateEntryPinInput').focus(), 100);
+    },
+    
+    // Verificar PIN y abrir entrada privada
+    verifyPinAndOpenEntry(entryId) {
+        const input = document.getElementById('privateEntryPinInput').value;
+        const storedPin = localStorage.getItem('wallapic_private_pin');
+        const errorMsg = document.getElementById('entryPinError');
+
+        if (input === storedPin) {
+            // Cerrar modal
+            const modal = document.getElementById('privateEntryAccessModal');
+            if (modal) modal.remove();
+            
+            // Abrir la entrada normalmente
+            viewEntry(entryId);
+        } else {
+            errorMsg.style.display = 'block';
+            document.getElementById('privateEntryPinInput').value = '';
+            document.getElementById('privateEntryPinInput').focus();
+        }
     }
 };
 
-// Inicializar cuando el DOM esté listo
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => archiveManager.init());
-} else {
+// Inicializar al cargar
+document.addEventListener('DOMContentLoaded', () => {
     archiveManager.init();
-}
+});
+
+// Exponer globalmente
+window.archiveManager = archiveManager;
+
+

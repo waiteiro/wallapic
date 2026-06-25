@@ -19,7 +19,7 @@ function abbreviateNumber(num) {
 }
 
 // Sistema de notificaciones toast
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', duration = 3000) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
@@ -29,7 +29,7 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, duration);
 }
 
 // Sistema de confirmación minimalista con modal
@@ -1092,7 +1092,7 @@ const entryCache = new Map(); // Map<entryId, {entry, isFavorite, timestamp}>
 const entryCacheExpiry = 5 * 60 * 1000; // 5 minutos
 
 // Ver entrada pública (del feed) o privada (por enlace directo) - OPTIMIZADO
-async function viewPublicEntry(entryId, entryData = null) {
+async function viewPublicEntry(entryId, entryData = null, shareToken = null) {
     if (!window.supabaseClient) return;
     
     const entryDetails = document.getElementById('entryDetails');
@@ -1173,12 +1173,35 @@ async function viewPublicEntry(entryId, entryData = null) {
     
     // PASO 4: Cargar desde BD en background
     try {
-        const [entryResult, favoriteResult, countResult, commentCountResult] = await Promise.all([
-            window.supabaseClient
-                .from('entries')
-                .select('*')
-                .eq('id', entryId)
-                .single(),
+        // Construir query base
+        let query = window.supabaseClient
+            .from('entries')
+            .select('*')
+            .eq('id', entryId);
+        
+        const entryResult = await query.single();
+        
+        if (entryResult.error) throw entryResult.error;
+        
+        const entry = entryResult.data;
+        
+        // VERIFICACIÓN DE ACCESO
+        const isOwner = currentUser && entry.user_id === currentUser.id;
+        const isPublic = entry.is_public;
+        const hasValidToken = shareToken && entry.share_token === shareToken;
+        
+        // Permitir acceso si:
+        // 1. Es el dueño
+        // 2. Es pública
+        // 3. Tiene token válido
+        if (!isOwner && !isPublic && !hasValidToken) {
+            showToast('No tienes permiso para ver esta entrada', 'error');
+            entryModal.classList.remove('active');
+            return;
+        }
+        
+        // Si pasó la verificación, continuar normalmente
+        const [favoriteResult, countResult, commentCountResult] = await Promise.all([
             currentUser ? window.supabaseClient
                 .from('favorites')
                 .select('id')
@@ -1189,9 +1212,6 @@ async function viewPublicEntry(entryId, entryData = null) {
             getCommentCount(entryId)
         ]);
         
-        if (entryResult.error) throw entryResult.error;
-        
-        const entry = entryResult.data;
         const isFavorite = !!favoriteResult.data;
         const favoriteCount = countResult;
         const commentCount = commentCountResult;
@@ -1285,7 +1305,7 @@ function renderEntryContent(entry, isFavorite, favoriteCount, container) {
                         Volver
                     </button>
                 ` : ''}
-                ${entry.image ? `<img src="${entry.image.url}" alt="${entry.image.alt}" class="entry-image">` : ''}
+                ${entry.image ? renderMediaFull(entry.image, "entry-image") : ""}
             </div>
             <div class="entry-right-side">
                 <div class="entry-content-container">
@@ -1638,8 +1658,47 @@ window.loadFavorites = loadFavorites;
 // ============================================
 
 // Compartir entrada (copiar link)
-function shareEntry(entryId) {
-    const url = `${window.location.origin}${window.location.pathname}#entry=${entryId}`;
+async function shareEntry(entryId) {
+    // Buscar la entrada para verificar si es pública o privada
+    let shareToken = null;
+    
+    try {
+        // Obtener la entrada
+        const { data: entry, error } = await window.supabaseClient
+            .from('entries')
+            .select('is_public, share_token, user_id')
+            .eq('id', entryId)
+            .single();
+        
+        if (error) throw error;
+        
+        // Si la entrada NO es pública, necesitamos un token
+        if (!entry.is_public) {
+            // Si ya tiene token, usarlo; si no, generar uno nuevo
+            if (entry.share_token) {
+                shareToken = entry.share_token;
+            } else {
+                // Generar token único
+                shareToken = generateShareToken();
+                
+                // Guardar token en la base de datos
+                const { error: updateError } = await window.supabaseClient
+                    .from('entries')
+                    .update({ share_token: shareToken })
+                    .eq('id', entryId);
+                
+                if (updateError) throw updateError;
+            }
+        }
+    } catch (error) {
+        console.error('Error al preparar enlace compartido:', error);
+        // Continuar sin token si hay error
+    }
+    
+    // Construir URL con o sin token
+    const url = shareToken 
+        ? `${window.location.origin}${window.location.pathname}#entry=${entryId}&token=${shareToken}`
+        : `${window.location.origin}${window.location.pathname}#entry=${entryId}`;
     
     // Copiar al portapapeles
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1651,6 +1710,13 @@ function shareEntry(entryId) {
     } else {
         fallbackCopyToClipboard(url);
     }
+}
+
+// Generar token único para compartir
+function generateShareToken() {
+    return 'share_' + Math.random().toString(36).substring(2, 15) + 
+           Math.random().toString(36).substring(2, 15) + 
+           Date.now().toString(36);
 }
 
 // Fallback para copiar al portapapeles
@@ -1676,15 +1742,20 @@ function fallbackCopyToClipboard(text) {
 function checkUrlHashAndOpenEntry() {
     const hash = window.location.hash;
     
-    if (hash && hash.startsWith('#entry=')) {
-        const entryId = hash.replace('#entry=', '');
+    if (hash && hash.includes('entry=')) {
+        // Parsear el hash para extraer entryId y token
+        const params = new URLSearchParams(hash.substring(1)); // Quitar el #
+        const entryId = params.get('entry');
+        const token = params.get('token');
         
-        // Esperar un momento para que todo esté cargado
-        setTimeout(() => {
-            if (typeof viewPublicEntry === 'function') {
-                viewPublicEntry(entryId);
-            }
-        }, 500);
+        if (entryId) {
+            // Esperar un momento para que todo esté cargado
+            setTimeout(() => {
+                if (typeof viewPublicEntry === 'function') {
+                    viewPublicEntry(entryId, null, token);
+                }
+            }, 500);
+        }
     }
 }
 
@@ -3308,7 +3379,7 @@ async function resonateEntry(entryId) {
             <div class="entry-view entry-editor-view">
                 <button class="entry-close-btn" onclick="closeEntry()" aria-label="Cerrar">×</button>
                 <div class="entry-image-container">
-                    <img src="${entry.image.url}" alt="${entry.image.alt || ''}" class="entry-image">
+                    ${renderMediaFull(entry.image, "entry-image")}
                 </div>
                 <div class="entry-right-side">
                     <div class="entry-content-container">
@@ -3715,3 +3786,5 @@ function goBackToEntry() {
         }
     }
 }
+
+

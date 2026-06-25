@@ -35,6 +35,7 @@ async function saveEntryToStorage(entry) {
                     word_count: entry.wordCount,
                     char_count: entry.charCount,
                     is_public: entry.isPublic || false,
+                    is_private: entry.isPrivate || false,
                     writing_seconds: entry.writingSeconds || null,
                     completed_with_timer: entry.completedWithTimer || false,
                     timer_seconds_used: entry.timerSecondsUsed || null
@@ -202,6 +203,8 @@ async function loadEntriesFromStorage() {
                 wordCount: e.word_count,
                 charCount: e.char_count,
                 isPublic: e.is_public,
+                shareToken: e.share_token || null,
+                isPrivate: e.is_private || false,
                 isArchived: e.is_archived,
                 writingSeconds: e.writing_seconds || null,
                 completedWithTimer: e.completed_with_timer || false,
@@ -613,6 +616,270 @@ function loadUnlockedBadgesFromLocalStorage() {
 }
 
 // ============================================
+// COLECCIONES PERSONALIZADAS
+// ============================================
+
+// Crear colección
+async function createCollection(name, description = null) {
+    const user = getCurrentUser();
+    
+    if (!user || !window.supabaseClient) {
+        throw new Error('Necesitas iniciar sesión para crear colecciones');
+    }
+    
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('collections')
+            .insert([{
+                user_id: user.id,
+                name: name,
+                description: description
+            }])
+            .select()
+            .single();
+        
+        if (error) {
+            if (error.message.includes('unique')) {
+                throw new Error('Ya tienes una colección con ese nombre');
+            }
+            throw error;
+        }
+        
+        console.log('✅ Colección creada:', data);
+        return data;
+        
+    } catch (error) {
+        console.error('❌ Error creando colección:', error);
+        throw error;
+    }
+}
+
+// Cargar colecciones con conteo de entradas
+async function loadCollections() {
+    const user = getCurrentUser();
+    
+    if (!user || !window.supabaseClient) {
+        return [];
+    }
+    
+    try {
+        // Cargar colecciones con conteo de entradas
+        const { data, error } = await window.supabaseClient
+            .from('collections')
+            .select(`
+                id,
+                name,
+                description,
+                created_at,
+                updated_at,
+                collection_entries(count)
+            `)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        // Formatear datos
+        const collections = data.map(c => ({
+            id: c.id,
+            name: c.name,
+            description: c.description,
+            createdAt: c.created_at,
+            updatedAt: c.updated_at,
+            entryCount: c.collection_entries[0]?.count || 0
+        }));
+        
+        console.log(`✅ ${collections.length} colecciones cargadas`);
+        return collections;
+        
+    } catch (error) {
+        console.error('❌ Error cargando colecciones:', error);
+        return [];
+    }
+}
+
+// Agregar entrada a colección
+async function addEntryToCollection(entrySupabaseId, collectionId) {
+    const user = getCurrentUser();
+    
+    if (!user || !window.supabaseClient) {
+        throw new Error('Necesitas iniciar sesión');
+    }
+    
+    try {
+        const { error } = await window.supabaseClient
+            .from('collection_entries')
+            .insert([{
+                collection_id: collectionId,
+                entry_id: entrySupabaseId
+            }]);
+        
+        if (error) {
+            if (error.message.includes('unique')) {
+                throw new Error('Esta entrada ya está en la colección');
+            }
+            throw error;
+        }
+        
+        console.log('✅ Entrada agregada a colección');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error agregando entrada a colección:', error);
+        throw error;
+    }
+}
+
+// Quitar entrada de colección
+async function removeEntryFromCollection(entrySupabaseId, collectionId) {
+    const user = getCurrentUser();
+    
+    if (!user || !window.supabaseClient) {
+        throw new Error('Necesitas iniciar sesión');
+    }
+    
+    try {
+        const { error } = await window.supabaseClient
+            .from('collection_entries')
+            .delete()
+            .eq('collection_id', collectionId)
+            .eq('entry_id', entrySupabaseId);
+        
+        if (error) throw error;
+        
+        console.log('✅ Entrada quitada de colección');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error quitando entrada:', error);
+        throw error;
+    }
+}
+
+// Cargar entradas de una colección
+async function loadCollectionEntries(collectionId) {
+    const user = getCurrentUser();
+    
+    if (!user || !window.supabaseClient) {
+        return [];
+    }
+    
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('collection_entries')
+            .select(`
+                id,
+                added_at,
+                entries (
+                    id,
+                    date,
+                    mood,
+                    title,
+                    text,
+                    image,
+                    word_count,
+                    char_count,
+                    is_public,
+                    is_private,
+                    writing_seconds,
+                    completed_with_timer,
+                    timer_seconds_used
+                )
+            `)
+            .eq('collection_id', collectionId)
+            .order('added_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        // Formatear datos
+        const entries = data.map(ce => {
+            const e = ce.entries;
+            return {
+                id: e.id,
+                supabaseId: e.id,
+                date: e.date,
+                mood: e.mood,
+                title: e.title,
+                text: e.text,
+                image: e.image,
+                wordCount: e.word_count,
+                charCount: e.char_count,
+                isPublic: e.is_public,
+                isPrivate: e.is_private,
+                writingSeconds: e.writing_seconds,
+                completedWithTimer: e.completed_with_timer,
+                timerSecondsUsed: e.timer_seconds_used,
+                addedAt: ce.added_at,
+                fromCloud: true
+            };
+        });
+        
+        console.log(`✅ ${entries.length} entradas cargadas de colección`);
+        return entries;
+        
+    } catch (error) {
+        console.error('❌ Error cargando entradas de colección:', error);
+        return [];
+    }
+}
+
+// Eliminar colección
+async function deleteCollection(collectionId) {
+    const user = getCurrentUser();
+    
+    if (!user || !window.supabaseClient) {
+        throw new Error('Necesitas iniciar sesión');
+    }
+    
+    try {
+        const { error } = await window.supabaseClient
+            .from('collections')
+            .delete()
+            .eq('id', collectionId)
+            .eq('user_id', user.id);
+        
+        if (error) throw error;
+        
+        console.log('✅ Colección eliminada');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error eliminando colección:', error);
+        throw error;
+    }
+}
+
+// Obtener colecciones de una entrada específica
+async function getEntryCollections(entrySupabaseId) {
+    const user = getCurrentUser();
+    
+    if (!user || !window.supabaseClient) {
+        return [];
+    }
+    
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('collection_entries')
+            .select(`
+                collection_id,
+                collections (
+                    id,
+                    name
+                )
+            `)
+            .eq('entry_id', entrySupabaseId);
+        
+        if (error) throw error;
+        
+        return data.map(ce => ce.collections);
+        
+    } catch (error) {
+        console.error('❌ Error cargando colecciones de entrada:', error);
+        return [];
+    }
+}
+
+// ============================================
 // EXPORTAR FUNCIONES
 // ============================================
 
@@ -641,7 +908,16 @@ window.storageManager = {
     
     // Mejor racha
     saveBestStreak,
-    loadBestStreak
+    loadBestStreak,
+    
+    // Colecciones
+    createCollection,
+    loadCollections,
+    addEntryToCollection,
+    removeEntryFromCollection,
+    loadCollectionEntries,
+    deleteCollection,
+    getEntryCollections
 };
 
 

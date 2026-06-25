@@ -2,6 +2,12 @@
 // BANCO DE IMÁGENES - ImgBB Integration
 // ============================================
 
+// Función helper para calcular el límite dinámico de imágenes
+function getImageBankLimit() {
+    const entriesCount = window.currentState?.entries?.length || 0;
+    return entriesCount >= 300 ? 2000 : 500;
+}
+
 class ImageBank {
     constructor() {
         this.currentUser = null;
@@ -257,7 +263,7 @@ class ImageBank {
             // Obtener todas las entradas del usuario que tengan imagen
             const { data, error } = await supabaseClient
                 .from('entries')
-                .select('id, date, title, image, created_at')
+                .select('id, date, title, image, created_at, is_private')
                 .eq('user_id', this.currentUser.id)
                 .not('image', 'is', null)
                 .order('created_at', { ascending: false });
@@ -279,6 +285,7 @@ class ImageBank {
                     used: true,
                     used_at: entry.created_at,
                     created_at: entry.created_at,
+                    is_private: entry.is_private || false, // ← Campo añadido
                     // Metadata adicional
                     isFromEntry: true // Flag para distinguir de imágenes del banco
                 };
@@ -497,6 +504,42 @@ class ImageBank {
         }
     }
 
+    // Desmarcar imagen como usada (cuando se elimina la entrada)
+    async unmarkImageAsUsed(imageId) {
+        console.log('🔄 Desmarcando imagen como usada:', imageId);
+        
+        try {
+            const { data, error } = await supabaseClient
+                .from('user_images')
+                .update({
+                    used: false,
+                    used_at: null,
+                    entry_id: null
+                })
+                .eq('id', imageId)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('❌ Error de Supabase:', error);
+                throw error;
+            }
+
+            // Actualizar lista local
+            const index = this.images.findIndex(img => img.id === imageId);
+            if (index !== -1) {
+                this.images[index] = data;
+            }
+
+            console.log('✅ Imagen liberada y devuelta a Disponibles');
+            return data;
+
+        } catch (error) {
+            console.error('Error al desmarcar imagen:', error);
+            throw error;
+        }
+    }
+
     // Seleccionar imagen para escribir con ella
     selectImageForWriting(image) {
         this.selectedImageForWriting = image;
@@ -603,13 +646,13 @@ class ImageBankUI {
                                     <span class="stat-label">Usadas</span>
                                 </div>
                             </div>
-                            <div class="image-limit-indicator">
+                            <div class="image-limit-indicator" id="imageLimitContainer">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
                                     <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
                                     <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
                                 </svg>
-                                <span id="imageLimitIndicator">0/100</span>
+                                <span id="imageLimitIndicator">0/500</span>
                             </div>
                         </div>
 
@@ -816,12 +859,18 @@ class ImageBankUI {
         const files = Array.from(event.target.files);
         if (files.length === 0) return;
 
-        // Verificar límite de 100 imágenes
+        // Calcular límite dinámico basado en entradas guardadas
+        const maxImages = getImageBankLimit();
+        
+        // Verificar límite dinámico de imágenes
         const currentCount = this.imageBank.images.length;
-        const maxImages = 100;
         
         if (currentCount >= maxImages) {
-            showToast(`❌ Límite alcanzado: máximo ${maxImages} imágenes`, 'error');
+            if (maxImages === 500) {
+                showToast(`❌ Límite alcanzado: máximo ${maxImages} imágenes. Llega a 300 entradas para desbloquear 2000 imágenes.`, 'error');
+            } else {
+                showToast(`❌ Límite alcanzado: máximo ${maxImages} imágenes`, 'error');
+            }
             return;
         }
         
@@ -1025,7 +1074,9 @@ class ImageBankUI {
 
     async updateStats() {
         const stats = await this.imageBank.getStats();
-        const maxImages = 100;
+        
+        // Calcular límite dinámico basado en entradas guardadas
+        const maxImages = getImageBankLimit();
         
         document.getElementById('totalImagesCount').textContent = stats.total;
         document.getElementById('availableImagesCount').textContent = stats.available;
@@ -1034,8 +1085,17 @@ class ImageBankUI {
         
         // Actualizar indicador de límite
         const limitIndicator = document.getElementById('imageLimitIndicator');
+        const limitContainer = document.getElementById('imageLimitContainer');
+        
         if (limitIndicator) {
+            const entriesCount = window.currentState?.entries?.length || 0;
+            
             limitIndicator.textContent = `${stats.total}/${maxImages}`;
+            
+            // SIN TOOLTIP - eliminado completamente
+            if (limitContainer) {
+                limitContainer.removeAttribute('data-tooltip');
+            }
             
             // Obtener el tema actual
             const isDarkTheme = document.documentElement.getAttribute('data-theme') !== 'light';
@@ -1043,7 +1103,7 @@ class ImageBankUI {
             // Cambiar color según proximidad al límite y tema
             if (stats.total >= maxImages) {
                 limitIndicator.style.color = 'rgba(239, 68, 68, 0.9)'; // Rojo (mismo en ambos temas)
-            } else if (stats.total >= 90) {
+            } else if (stats.total >= maxImages * 0.9) {
                 limitIndicator.style.color = 'rgba(251, 191, 36, 0.9)'; // Amarillo (mismo en ambos temas)
             } else {
                 // Color normal según tema
@@ -1182,33 +1242,44 @@ class ImageBankUI {
                 sourceLabel = 'Banco personal';
             }
 
+            // Determinar si es privada
+            const isPrivate = img.is_private === true;
+
             return `
-                <div class="image-bank-item used" data-id="${img.id}" data-entry-id="${img.entry_id || ''}">
+                <div class="image-bank-item used ${isPrivate ? 'private-entry' : ''}" data-id="${img.id}" data-entry-id="${img.entry_id || ''}">
                     <img 
                         data-src="${img.thumbnail_url || img.image_url}" 
-                        alt="${img.title || 'Imagen'}"
+                        alt="${isPrivate ? 'Entrada privada' : (img.title || 'Imagen')}"
                         class="lazy-load"
-                        loading="lazy">
-                    <div class="image-source-badge">${sourceIcon} ${sourceLabel}</div>
-                    <div class="image-bank-item-overlay">
-                        <button class="image-bank-item-btn view-entry-btn" data-entry-id="${img.entry_id || ''}" title="Ver entrada">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                            </svg>
-                        </button>
-                        ${!img.isFromEntry ? `
-                        <button class="image-bank-item-btn delete-btn" data-id="${img.id}" title="Eliminar">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                        </button>
-                        ` : ''}
-                    </div>
-                    <p class="image-bank-item-title">${img.title || 'Sin título'}</p>
+                        loading="lazy"
+                        style="${isPrivate ? 'filter: blur(20px);' : ''}">
+                    ${isPrivate ? `
+                        <div class="private-overlay">
+                            <div class="private-lock">🔒</div>
+                            <div class="private-text">Privada</div>
+                        </div>
+                    ` : `
+                        <div class="image-source-badge">${sourceIcon} ${sourceLabel}</div>
+                        <div class="image-bank-item-overlay">
+                            <button class="image-bank-item-btn view-entry-btn" data-entry-id="${img.entry_id || ''}" title="Ver entrada">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                            </button>
+                            ${!img.isFromEntry ? `
+                            <button class="image-bank-item-btn delete-btn" data-id="${img.id}" title="Eliminar">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                            ` : ''}
+                        </div>
+                    `}
+                    <p class="image-bank-item-title">${isPrivate ? '🔒 Entrada privada' : (img.title || 'Sin título')}</p>
                     <p class="image-bank-item-date">Usada: ${usedDate}</p>
                 </div>
             `;

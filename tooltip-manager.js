@@ -7,6 +7,9 @@ class TooltipManager {
     constructor() {
         this.tooltip = null;
         this.currentTarget = null;
+        this.boundShow = null;
+        this.boundHide = null;
+        this.attachedElements = new WeakSet(); // Para rastrear elementos con listeners
         this.init();
     }
 
@@ -21,6 +24,10 @@ class TooltipManager {
         this.tooltipText = this.tooltip.querySelector('.custom-tooltip-text');
         this.tooltipArrow = this.tooltip.querySelector('.custom-tooltip-arrow');
 
+        // Crear funciones bound una vez
+        this.boundShow = (e) => this.show(e.target);
+        this.boundHide = () => this.hide();
+
         // Inicializar listeners
         this.attachListeners();
     }
@@ -30,8 +37,17 @@ class TooltipManager {
         const elements = document.querySelectorAll('[data-tooltip]');
         
         elements.forEach(element => {
-            element.addEventListener('mouseenter', (e) => this.show(e.target));
-            element.addEventListener('mouseleave', () => this.hide());
+            // Solo agregar listeners si no los tiene ya
+            if (!this.attachedElements.has(element)) {
+                // Remover cualquier listener previo por si acaso
+                element.removeEventListener('mouseenter', this.boundShow);
+                element.removeEventListener('mouseleave', this.boundHide);
+                
+                // Agregar listeners nuevos
+                element.addEventListener('mouseenter', this.boundShow);
+                element.addEventListener('mouseleave', this.boundHide);
+                this.attachedElements.add(element);
+            }
         });
     }
 
@@ -81,6 +97,12 @@ class TooltipManager {
             position.x = rect.left - this.tooltip.offsetWidth - spacing;
             position.y = rect.top + (rect.height / 2) - (this.tooltip.offsetHeight / 2);
             position.arrow = 'left';
+            
+        } else if (target.id === 'imageLimitContainer') {
+            // Indicador de límite: arriba y centrado
+            position.x = rect.left + (rect.width / 2) - (this.tooltip.offsetWidth / 2);
+            position.y = rect.top - this.tooltip.offsetHeight - spacing;
+            position.arrow = 'top';
             
         } else if (target.id === 'historyBtn') {
             // Feed Público: abajo y alineado a la derecha
