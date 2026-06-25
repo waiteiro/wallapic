@@ -3,6 +3,9 @@ const PEXELS_API_KEY = 'PZqacS9s22YzIhcq2gOnnnpW3b0GEHYMRCYn6uFHC88emGMpAl1QtRKN
 const UNSPLASH_ACCESS_KEY = 'gGr37vwsEOoqo6jw4yFAcQnl4ikG5MRxRzhvffqMToE';
 const PIXABAY_API_KEY = '35815997-2fc59b57aae26c1087246893b';
 
+// Exportar globalmente para video-manager
+window.PEXELS_API_KEY = PEXELS_API_KEY;
+
 // Distribución: 33% Comunidad, ~17% cada API externa (Unsplash, Pexels, Pixabay, Wikimedia)
 const IMAGE_SOURCES = ['unsplash', 'pexels', 'pixabay', 'wikimedia', 'shared', 'shared'];
 let currentSourceIndex = 0;
@@ -62,6 +65,9 @@ const IMAGE_CATEGORIES = [
 
 let selectedCategory = 'random';
 let pinnedImages = [];
+
+// Exportar pinnedImages globalmente para video-manager
+window.pinnedImages = pinnedImages;
 
 // Función para obtener todos los temas de todas las categorías (dinámico)
 function getAllThemes() {
@@ -138,6 +144,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderCategories();
     updateStreak(); // Actualizar racha
     
+    // Restaurar estado minimizado de cinta pineada
+    const isMinimized = localStorage.getItem('wallapic_pinned_minimized') === 'true';
+    if (isMinimized) {
+        const ribbon = document.getElementById('pinnedRibbon');
+        const toggleBtn = document.getElementById('togglePinnedBtn');
+        if (ribbon) ribbon.classList.add('minimized');
+        if (toggleBtn) {
+            toggleBtn.setAttribute('data-tooltip', 'Mostrar cinta');
+            toggleBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+            `;
+        }
+    }
+    
     // Inicializar sistema de variaciones de retos
     initDailyWord(); // Mantener diccionario
     if (typeof window.challengeVariations !== 'undefined') {
@@ -159,6 +182,40 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Resetear lastSavedEntry porque cambió la imagen (nueva entrada)
                 currentState.lastSavedEntry = null;
             });
+        });
+    }
+    
+    // Event listener para toggle de cinta pineada
+    const togglePinnedBtn = document.getElementById('togglePinnedBtn');
+    if (togglePinnedBtn) {
+        togglePinnedBtn.addEventListener('click', () => {
+            const ribbon = document.getElementById('pinnedRibbon');
+            if (ribbon) {
+                ribbon.classList.toggle('minimized');
+                const isMinimized = ribbon.classList.contains('minimized');
+                
+                // Cambiar icono y tooltip
+                if (isMinimized) {
+                    togglePinnedBtn.setAttribute('data-tooltip', 'Mostrar cinta');
+                    togglePinnedBtn.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                        </svg>
+                    `;
+                } else {
+                    togglePinnedBtn.setAttribute('data-tooltip', 'Ocultar cinta');
+                    togglePinnedBtn.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    `;
+                }
+                
+                // Guardar preferencia
+                localStorage.setItem('wallapic_pinned_minimized', isMinimized);
+            }
         });
     }
     
@@ -237,6 +294,16 @@ function setupEventListeners() {
             if (modal) modal.classList.remove('active');
         });
     }
+    
+    // Botón de Ontolé
+    const ontoleBtn = document.getElementById('ontoleBtn');
+    if (ontoleBtn) {
+        ontoleBtn.addEventListener('click', () => {
+            if (typeof window.ontoleInstance !== 'undefined') {
+                window.ontoleInstance.open();
+            }
+        });
+    }
 
     // Modales
     elements.closeHistoryBtn.addEventListener('click', closeHistory);
@@ -279,13 +346,7 @@ function setupEventListeners() {
         });
     }
     
-    // Cerrar modal de confirmación de limpieza
-    const clearConfirmModal = document.getElementById('clearConfirmModal');
-    if (clearConfirmModal) {
-        clearConfirmModal.addEventListener('click', (e) => {
-            if (e.target === clearConfirmModal) closeClearConfirmModal();
-        });
-    }
+
 
     // Atajos de teclado
     document.addEventListener('keydown', (e) => {
@@ -327,7 +388,6 @@ function setupEventListeners() {
             closeCategoryModal();
             closeArchive();
             closeBadgeDetail();
-            closeClearConfirmModal();
             closeHelpModal();
             const statsModal = document.getElementById('statsModal');
             if (statsModal) statsModal.classList.remove('active');
@@ -338,6 +398,13 @@ function setupEventListeners() {
 // Cargar imagen aleatoria alternando entre APIs
 async function loadRandomImage() {
     elements.imageLoader.classList.remove('hidden');
+    
+    // Actualizar texto del loader según el modo actual
+    const loaderText = elements.imageLoader ? elements.imageLoader.querySelector('p') : null;
+    if (loaderText) {
+        loaderText.textContent = 'Cargando imagen...';
+    }
+    
     elements.mainImage.style.opacity = '0';
 
     // Seleccionar tema según categoría
@@ -994,7 +1061,7 @@ async function saveEntry() {
             mood: currentState.mood,
             title: currentState.title.trim() || null,
             text: currentState.text.trim(),
-            image: currentState.imageData,
+            image: window.videoManager?.isVideoMode ? window.videoManager.getCurrentVideoData() : currentState.imageData,
             wordCount: currentState.text.trim().split(/\s+/).length,
             charCount: currentState.text.length,
             isPublic: false,
@@ -1151,6 +1218,18 @@ async function saveEntry() {
             console.log(`🏆 ${newBadges.length} badges verificados`);
         }
         
+        // VERIFICAR SI SE DESBLOQUEÓ EL LÍMITE AMPLIADO DEL BANCO DE IMÁGENES
+        // Solo mostrar notificación una vez cuando alcance exactamente 300 entradas
+        if (!isUpdate && currentState.entries.length === 300) {
+            const hasShownUnlock = localStorage.getItem('wallapic_imagebank_unlocked');
+            if (!hasShownUnlock) {
+                setTimeout(() => {
+                    showToast('🎉 ¡DESBLOQUEADO! Banco de Imágenes ampliado a 2000 fotos', 'success', 5000);
+                    localStorage.setItem('wallapic_imagebank_unlocked', 'true');
+                }, 1500); // Esperar 1.5s para que no se superponga con otros mensajes
+            }
+        }
+        
         // ========================================
         // 3. UI FINAL - Mostrar éxito
         // ========================================
@@ -1213,6 +1292,8 @@ function saveDraftIfLocked() {
         title: elements.titleInput.value,
         text: elements.writingArea.value,
         image: currentState.imageData,
+        video: window.videoManager?.isVideoMode ? window.videoManager.getCurrentVideoData() : null,
+        isVideoMode: window.videoManager?.isVideoMode || false,
         timestamp: Date.now()
     };
     
@@ -1255,8 +1336,13 @@ function loadDraft() {
             currentState.title = draft.title;
         }
         
-        // Restaurar imagen
-        if (draft.image) {
+        // Restaurar video o imagen
+        if (draft.isVideoMode && draft.video && window.videoManager) {
+            // Restaurar video
+            console.log('🔄 Restaurando video del borrador...');
+            window.videoManager.loadSpecificVideo(draft.video);
+        } else if (draft.image) {
+            // Restaurar imagen
             currentState.imageData = draft.image;
             loadImageWithCredit(draft.image);
         }
@@ -1287,9 +1373,9 @@ function toggleDraftLock() {
     updateLockButton();
     
     if (currentState.draftLocked) {
-        // Guardar borrador inmediatamente al activar (incluye imagen actual)
+        // Guardar borrador inmediatamente al activar (incluye imagen/video actual)
         saveDraftIfLocked();
-        showToast('Borrador bloqueado - Imagen y texto se mantendrán al recargar', 'success');
+        showToast('Borrador bloqueado - Contenido se mantendrá al recargar', 'success');
     } else {
         // Limpiar borrador al desactivar
         clearDraft();
@@ -1353,80 +1439,33 @@ function clearForm() {
     checkSaveButton();
 }
 
-// Limpiar y reiniciar (botón de limpiar)
+// Limpiar texto (botón de limpiar)
 function clearAndRestart() {
-    // Abrir modal de confirmación en lugar de alert
-    const modal = document.getElementById('clearConfirmModal');
-    if (modal) {
-        modal.classList.add('active');
-    }
-}
-
-// Cerrar modal de confirmación de limpieza
-function closeClearConfirmModal() {
-    const modal = document.getElementById('clearConfirmModal');
-    if (modal) {
-        modal.classList.remove('active');
-    }
-}
-
-// Confirmar limpieza según tipo
-function confirmClear(type) {
-    closeClearConfirmModal();
+    // Solo limpiar texto y título
+    elements.writingArea.value = '';
+    elements.titleInput.value = '';
+    currentState.text = '';
+    currentState.title = '';
+    currentState.lastSavedEntry = null; // Resetear para que la siguiente sea nueva
+    updateStats();
+    clearDraft();
     
-    if (type === 'text') {
-        // Solo limpiar texto y título
-        elements.writingArea.value = '';
-        elements.titleInput.value = '';
-        currentState.text = '';
-        currentState.title = '';
-        currentState.lastSavedEntry = null; // Resetear para que la siguiente sea nueva
-        updateStats();
-        clearDraft();
-        
-        // Desbloquear después de limpiar
-        currentState.draftLocked = false;
-        updateLockButton();
-        
-        // Limpiar temporizador si está activo
-        if (typeof window.challengeVariations !== 'undefined') {
-            window.challengeVariations.cleanupTimer();
-        }
-        
-        // Re-renderizar variación del día
-        if (typeof window.challengeVariations !== 'undefined') {
-            window.challengeVariations.renderDailyVariation();
-        }
-        
-        showToast('Texto limpiado', 'success');
-    } else if (type === 'all') {
-        // Limpiar temporizador si está activo
-        if (typeof window.challengeVariations !== 'undefined') {
-            window.challengeVariations.cleanupTimer();
-        }
-        
-        clearForm();
-        clearDraft();
-        
-        // Desbloquear después de limpiar todo
-        currentState.draftLocked = false;
-        updateLockButton();
-        
-        // Recargar imagen del día en lugar de imagen aleatoria
-        loadOrCheckDailyImage();
-        
-        // Re-renderizar variación del día
-        if (typeof window.challengeVariations !== 'undefined') {
-            window.challengeVariations.renderDailyVariation();
-        }
-        
-        showToast('Todo limpiado', 'success');
+    // Desbloquear después de limpiar
+    currentState.draftLocked = false;
+    updateLockButton();
+    
+    // Limpiar temporizador si está activo
+    if (typeof window.challengeVariations !== 'undefined') {
+        window.challengeVariations.cleanupTimer();
     }
+    
+    // Re-renderizar variación del día
+    if (typeof window.challengeVariations !== 'undefined') {
+        window.challengeVariations.renderDailyVariation();
+    }
+    
+    showToast('Texto limpiado', 'success');
 }
-
-// Exportar funciones para uso en HTML
-window.closeClearConfirmModal = closeClearConfirmModal;
-window.confirmClear = confirmClear;
 
 // Abrir historial (ahora es Feed Público)
 function openHistory() {
@@ -1455,10 +1494,18 @@ function openArchive() {
     // Resetear al tab "Mis Entradas"
     if (typeof archiveManager !== 'undefined') {
         archiveManager.currentTab = 'entries';
+        archiveManager.isInsideCollection = false; // Resetear estado de colección
+        
         // Actualizar UI de tabs
         document.querySelectorAll('.archive-tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.tab === 'entries');
         });
+        
+        // Ocultar botón de crear colección al abrir (solo se muestra en tab colecciones)
+        const createCollectionBtn = document.getElementById('createCollectionBtn');
+        if (createCollectionBtn) {
+            createCollectionBtn.style.display = 'none';
+        }
     }
     
     renderArchive();
@@ -1547,7 +1594,7 @@ function viewEntry(entryId, source = 'archive') {
         <div class="entry-view" data-entry-id="${entryId}" data-edit-mode="false">
             <button class="entry-close-btn" onclick="closeEntry()" aria-label="Cerrar">×</button>
             <div class="entry-image-container">
-                <img src="${entry.image.url}" alt="${entry.image.alt}" class="entry-image">
+                ${renderMediaFull(entry.image, "entry-image")}
             </div>
             <div class="entry-right-side">
                 <div class="entry-content-container">
@@ -1557,6 +1604,12 @@ function viewEntry(entryId, source = 'archive') {
                             ${getMoodIcon(entry.mood)}
                             <span style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">${moodLabels[entry.mood] || entry.mood}</span>
                         </div>
+                        ${entry.isPrivate ? `
+                            <div style="display: flex; align-items: center; gap: 0.4rem; margin-left: auto; opacity: 0.5;">
+                                <span style="font-size: 0.85rem;">🔒</span>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400;">Privada</span>
+                            </div>
+                        ` : ''}
                     </div>
                     ${entry.title ? `<h3 class="entry-title" id="entryTitleDisplay">${entry.title}</h3>` : '<h3 class="entry-title" id="entryTitleDisplay" style="display: none;"></h3>'}
                     <textarea id="entryTitleEdit" class="entry-title-edit" style="display: none;" placeholder="Título (opcional)">${entry.title || ''}</textarea>
@@ -1680,6 +1733,17 @@ async function deleteEntry(entryId) {
         // Buscar entrada por ID (string o número)
         const entry = currentState.entries.find(e => String(e.id) === String(entryId));
         const supabaseId = entry?.supabaseId || null;
+        
+        // Si la entrada tiene imagen del banco, liberarla
+        if (entry?.image?.source === 'user_bank' && entry?.image?.bankImageId) {
+            try {
+                await window.imageBankInstance.unmarkImageAsUsed(entry.image.bankImageId);
+                console.log('✅ Imagen del banco liberada');
+            } catch (error) {
+                console.error('⚠️ Error liberando imagen del banco:', error);
+                // Continuar con la eliminación aunque falle esto
+            }
+        }
         
         // Eliminar del storage (localStorage o Supabase)
         await window.storageManager.deleteEntry(entryId, supabaseId);
@@ -2161,20 +2225,22 @@ async function togglePinImage() {
         try {
             await window.storageManager.deletePinnedImage(index, image.supabaseId);
             pinnedImages.splice(index, 1);
+            window.pinnedImages = pinnedImages; // Sincronizar
         } catch (error) {
             console.error('Error desmarcando imagen:', error);
             return;
         }
     } else {
-        // Marcar (máximo 5)
-        if (pinnedImages.length >= 5) {
-            alert('Máximo 5 imágenes marcadas. Desmarca una para añadir otra.');
+        // Marcar (máximo 15)
+        if (pinnedImages.length >= 15) {
+            showToast('⚠️ Máximo 15 imágenes marcadas. Desmarca una para añadir otra.', 'warning');
             return;
         }
         
         try {
             const savedImage = await window.storageManager.savePinnedImage({...currentState.imageData});
             pinnedImages.push(savedImage);
+            window.pinnedImages = pinnedImages; // Sincronizar
         } catch (error) {
             console.error('Error marcando imagen:', error);
             return;
@@ -2202,25 +2268,61 @@ function updatePinButton() {
 
 function renderPinnedRibbon() {
     const ribbon = document.getElementById('pinnedRibbon');
+    const toggleBtn = document.getElementById('togglePinnedBtn');
+    
     if (!ribbon) return;
     
     if (pinnedImages.length === 0) {
         ribbon.innerHTML = '';
+        if (toggleBtn) toggleBtn.style.display = 'none';
         return;
     }
     
-    const currentUrl = currentState.imageData?.url;
+    // Mostrar botón de toggle si hay imágenes pineadas
+    if (toggleBtn) toggleBtn.style.display = 'flex';
     
-    ribbon.innerHTML = pinnedImages.map((img, index) => {
-        // Manejar diferentes formatos de URL de thumbnail
-        const thumbnailUrl = img.thumbnail || img.thumbnail_url || img.url;
-        const altText = img.alt || img.title || 'Imagen marcada';
+    const currentUrl = currentState.imageData?.url || window.videoManager?.currentVideo?.url;
+    
+    ribbon.innerHTML = pinnedImages.map((item, index) => {
+        const isVideo = item.type === 'video';
+        const isActive = item.url === currentUrl;
+        const altText = item.alt || item.title || (isVideo ? 'Video marcado' : 'Imagen marcada');
+        
+        let mediaElement;
+        
+        if (isVideo) {
+            // Mostrar video en miniatura reproduciéndose en loop
+            mediaElement = `
+                <video 
+                    src="${item.url}" 
+                    class="pinned-video-thumb"
+                    loop 
+                    muted 
+                    playsinline 
+                    autoplay
+                    crossorigin="anonymous"></video>
+            `;
+        } else {
+            // Mostrar imagen normal
+            const thumbnailUrl = item.thumbnail || item.thumbnail_url || item.url;
+            mediaElement = `<img src="${thumbnailUrl}" alt="${altText}" style="object-fit: cover;">`;
+        }
+        
+        // Indicador de video (pequeño ícono en la esquina inferior derecha)
+        const videoIndicator = isVideo ? `
+            <div class="video-indicator">
+                <svg viewBox="0 0 24 24" fill="white" stroke="none">
+                    <polygon points="8 5 19 12 8 19 8 5"></polygon>
+                </svg>
+            </div>
+        ` : '';
         
         return `
-            <div class="pinned-thumbnail ${img.url === currentUrl ? 'active' : ''}" 
-                 onclick="loadPinnedImage(${index})"
+            <div class="pinned-thumbnail ${isActive ? 'active' : ''}" 
+                 onclick="loadPinnedItem(${index})"
                  title="${altText}">
-                <img src="${thumbnailUrl}" alt="${altText}">
+                ${mediaElement}
+                ${videoIndicator}
                 <button class="pinned-thumbnail-remove" 
                         onclick="event.stopPropagation(); removePinnedImage(${index})"
                         title="Eliminar">×</button>
@@ -2246,11 +2348,49 @@ function loadPinnedImage(index) {
     }
 }
 
+// Nueva función para cargar tanto imágenes como videos desde la cinta
+async function loadPinnedItem(index) {
+    if (!pinnedImages[index]) return;
+    
+    const item = pinnedImages[index];
+    
+    if (item.type === 'video') {
+        // Es un video - usar videoManager
+        if (window.videoManager) {
+            await window.videoManager.loadSpecificVideo(item);
+            window.videoManager.updatePinButton();
+        }
+    } else {
+        // Es una imagen - comportamiento normal
+        currentState.imageData = item;
+        loadImageWithCredit(item);
+        updatePinButton();
+        
+        // Si estábamos en modo video, volver a imagen
+        if (window.videoManager && window.videoManager.isVideoMode) {
+            await window.videoManager.toggleMediaMode();
+        }
+    }
+    
+    renderPinnedRibbon();
+    
+    // Resetear lastSavedEntry porque cambió el medio (nueva entrada)
+    currentState.lastSavedEntry = null;
+    
+    // Si el borrador está bloqueado, actualizar el borrador
+    if (currentState.draftLocked) {
+        saveDraftIfLocked();
+    }
+}
+
+window.loadPinnedItem = loadPinnedItem;
+
 async function removePinnedImage(index) {
     try {
         const image = pinnedImages[index];
         await window.storageManager.deletePinnedImage(index, image.supabaseId);
         pinnedImages.splice(index, 1);
+        window.pinnedImages = pinnedImages; // Sincronizar
         updatePinButton();
         renderPinnedRibbon();
     } catch (error) {
@@ -2261,15 +2401,19 @@ async function removePinnedImage(index) {
 async function loadPinnedImages() {
     try {
         pinnedImages = await window.storageManager.loadPinnedImages();
+        window.pinnedImages = pinnedImages; // Sincronizar con window
         console.log(`📌 ${pinnedImages.length} imágenes pineadas cargadas`);
     } catch (error) {
         console.error('Error cargando imágenes marcadas:', error);
         pinnedImages = [];
+        window.pinnedImages = pinnedImages; // Sincronizar con window
     }
 }
 
 window.loadPinnedImage = loadPinnedImage;
+window.loadPinnedItem = loadPinnedItem;
 window.removePinnedImage = removePinnedImage;
+window.renderPinnedRibbon = renderPinnedRibbon;
 
 // Descargar imagen
 async function downloadImage() {
@@ -3064,4 +3208,5 @@ function formatWordDate(isoDate) {
 // Exportar funciones globales
 window.openWordFromDictionary = openWordFromDictionary;
 window.openPhraseFromDictionary = openPhraseFromDictionary;
+
 

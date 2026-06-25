@@ -1018,3 +1018,55 @@
 [data-theme="light"] .btn-confirm-full:hover {
     background: var(--accent-hover);
 }
+
+
+/* ============================================
+   IMÁGENES PRIVADAS EN "YA USADAS"
+   ============================================ */
+
+.image-bank-item.private-entry {
+    position: relative;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.image-bank-item.private-entry:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.private-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 2;
+    pointer-events: none;
+}
+
+.private-lock {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.9;
+}
+
+.private-text {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Tema claro */
+[data-theme="light"] .private-overlay {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="light"] .private-text {
+    color: rgba(0, 0, 0, 0.8);
+}
