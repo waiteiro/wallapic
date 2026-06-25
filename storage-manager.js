@@ -38,7 +38,8 @@ async function saveEntryToStorage(entry) {
                     is_private: entry.isPrivate || false,
                     writing_seconds: entry.writingSeconds || null,
                     completed_with_timer: entry.completedWithTimer || false,
-                    timer_seconds_used: entry.timerSecondsUsed || null
+                    timer_seconds_used: entry.timerSecondsUsed || null,
+                    ai_reimagined: entry.aiReimagined || false
                 }])
                 .select()
                 .single();
@@ -90,6 +91,7 @@ async function updateEntryInStorage(entry) {
                     writing_seconds: entry.writingSeconds || null,
                     completed_with_timer: entry.completedWithTimer || false,
                     timer_seconds_used: entry.timerSecondsUsed || null,
+                    ai_reimagined: entry.aiReimagined || false,
                     updated_at: window.getLocalISOString()
                 })
                 .eq('id', entry.supabaseId)
@@ -209,6 +211,7 @@ async function loadEntriesFromStorage() {
                 writingSeconds: e.writing_seconds || null,
                 completedWithTimer: e.completed_with_timer || false,
                 timerSecondsUsed: e.timer_seconds_used || null,
+                aiReimagined: e.ai_reimagined || false,
                 fromCloud: true
             }));
             

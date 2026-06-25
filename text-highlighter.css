@@ -1,0 +1,272 @@
+/* ============================================
+   TEXT HIGHLIGHTER - Estilos
+   ============================================ */
+
+/* Editor editable que reemplaza el textarea */
+.text-highlighter-editor {
+    width: 100%;
+    min-height: 200px;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: var(--text-primary, rgba(255, 255, 255, 0.9));
+    font-size: 0.95rem;
+    font-family: inherit;
+    line-height: 1.6;
+    outline: none;
+    transition: all 0.2s ease;
+    overflow-y: auto;
+    word-wrap: break-word;
+}
+
+.text-highlighter-editor:focus {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Menú contextual */
+.text-highlight-menu {
+    position: fixed;
+    background: rgba(20, 20, 20, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    gap: 4px;
+    z-index: 10000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transform: translateX(-50%);
+    animation: menuFadeIn 0.15s ease;
+}
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.highlight-menu-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.highlight-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+}
+
+.highlight-icon {
+    font-size: 1rem;
+}
+
+/* Modo selector de colores */
+.text-highlight-menu.color-picker-mode {
+    padding: 8px;
+    gap: 8px;
+}
+
+.color-btn {
+    width: 32px;
+    height: 32px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.color-btn:hover {
+    transform: scale(1.15);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Resaltado aplicado */
+.text-highlight {
+    padding: 2px 0;
+    border-radius: 2px;
+    transition: all 0.2s ease;
+}
+
+.text-highlight:hover {
+    opacity: 0.8;
+}
+
+/* Nota aplicada */
+.text-note {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: #4ECDC4;
+    text-decoration-thickness: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.text-note:hover {
+    text-decoration-color: #3DBCB3;
+    text-decoration-thickness: 2.5px;
+}
+
+/* Modal de nota */
+.note-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+    animation: modalFadeIn 0.2s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.note-modal-content {
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    padding: 0;
+    animation: modalSlideUp 0.3s ease;
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.note-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.note-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.note-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.note-modal-body {
+    padding: 1.25rem;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+.note-modal-actions {
+    display: flex;
+    gap: 8px;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.note-modal-actions button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.note-modal-edit {
+    background: rgba(78, 205, 196, 0.2);
+    color: #4ECDC4;
+    border: 1px solid rgba(78, 205, 196, 0.3);
+}
+
+.note-modal-edit:hover {
+    background: rgba(78, 205, 196, 0.3);
+    transform: translateY(-1px);
+}
+
+.note-modal-delete {
+    background: rgba(255, 107, 107, 0.2);
+    color: #FF6B6B;
+    border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.note-modal-delete:hover {
+    background: rgba(255, 107, 107, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .text-highlight-menu {
+        padding: 4px;
+        gap: 2px;
+    }
+
+    .highlight-menu-btn {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+
+    .color-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    .note-modal-content {
+        width: 95%;
+        max-width: none;
+        margin: 0 1rem;
+    }
+}

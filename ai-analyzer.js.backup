@@ -1,0 +1,401 @@
+ - PARA AUTORESCOMP++ - PARA AUTORES� y coach de escritura creativaarespuest e e giet mtoXAsedop ###:1.ANÁLISIS (2-3 párrfos cortos)
+2. POTENCIACIÓN (2 sugerecaconcrtas y accionals)3.RIMAGINACIÓN (eescituradexto nteniendo eenciastrutura, pro máot)
+###
+[Aálss quí]
+###
+[Sugencia1]
+[Sugreci2]
+###
+[Textmagiadoquí]
+**REGLAS:**
+RspenomodoginlElálisis dbe se ofudo cociso- La sugeencas denseresecíicay apliable
+-Lamaginación debe mantener la lngitud imilar- madr15reultcons pats=resut.plt('###').map(p =>p.trim()).filter(Boolean)    if(prts.leng <3    thrw w EFmtdresuestinváid}contsuggsis=par[1]spit\').filter(=>in.im())slice(02{iss: pts[0],    potncci: suggson,rco: pts[2];}ctch(rr){ole.error('Errorzndo:', ero);howrro;}}
+
+    // Analizar texto SOLO para LECTORES (solo análisis reflexivo)
+    async analyzeTextForReader(title, text, mood, imageContext) {
+        try {
+            console.log('📖 Analizando texto para lector...');
+            
+            const prompt = `Eres un analista literario experto.
+
+**ENTRADA DEL USUARIO:**
+${title ? `Título: "${title}"` : ''}
+Texto: "${text}"
+Mood: ${mood}
+${imageContext ? `Contexto visual: ${imageContext}` : ''}
+
+**TU TAREA:**
+Genera un análisis profundo y reflexivo para un LECTOR (no para el autor).
+
+El análisis debe:
+- Explorar los temas y emociones presentes
+- Identificar el mensaje o reflexión central
+- Comentar sobre el estilo y la voz narrativa
+- Ofrecer una interpretación personal
+
+Escribe 2-3 párrafos cortos y reflexivos.
+Usa un tono cálido y contemplativo.`;
+
+            const response = await fetch(this.baseUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.groqApiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: this.textModel,
+                    messages: [
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ],
+                    temperature: 0.8,
+                    max_tokens: 800
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error en respuesta de Groq API');
+            }
+
+            const data = await response.json();
+            const analisis = data.choices[0]?.message?.content?.trim() || '';
+            
+            return { analisis };
+            
+        } catch (error) {
+            console.error('Error analizando texto para lector:', error);
+            throw error;
+        }
+    }
+
+    // Analizar entrada para LECTORES (entradas públicas)
+    async analyzeEntryForReader(entryData) {
+        try {
+            console.log('🔍 Analizando entrada para lector...', entryData);
+            
+            const hasImage = entryData.image && (entryData.image.url || entryData.image.thumbnailUrl);
+            
+            let imageContext = '';
+            if (hasImage) {
+                imageContext = await this.analyzeImage(entryData.image.url || entryData.image.thumbnailUrl);
+            }
+            
+            const analysis = await this.analyzeTextForReader(
+                entryData.title || '',
+                entryData.text,
+                entryData.mood,
+                imageContext
+            );
+            
+            return analysis;
+            
+        } catch (error) {
+            console.error('Error analizando entrada para lector:', error);
+            throw error;
+        }
+    }
+
+    // Modal COMPLETO para autores
+    showAnalysisModal(analysis, entryId) {
+        const modalHTML = `
+            <div class="ai-analysis-modal" id="aiAnalysisModal">
+                <div class="ai-analysis-content">
+                    <div class="ai-analysis-header">
+                        <h2>🧠 Análisis IA</h2>
+                        <button class="ai-analysis-close" onclick="document.getElementById('aiAnalysisModal').remove()">×</button>
+                    </div>
+                    
+                    <div class="ai-analysis-body">
+                        <div class="ai-analysis-section">
+                            <div class="ai-analysis-section-title">
+                                <span class="ai-analysis-icon">🔍</span>
+                                <span>Análisis</span>
+                            </div>
+                            <div class="ai-analysis-text">${this.formatText(analysis.analisis)}</div>
+                        </div>
+                        
+                        <div class="ai-analysis-section">
+                            <div class="ai-analysis-section-title">
+                                <span class="ai-analysis-icon">💡</span>
+                                <span>Cómo Potenciarlo</span>
+                            </div>
+                            <div class="ai-analysis-suggestions">
+                                ${analysis.potenciacion.map((sug, i) => `
+                                    <div class="ai-analysis-suggestion">
+                                        <span class="ai-suggestion-number">${i + 1}</span>
+                                        <span>${this.formatText(sug)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <div class="ai-analysis-section">
+                            <div class="ai-analysis-section-title">
+                                <span class="ai-analysis-icon">✨</span>
+                                <span>Versión Reimaginada</span>
+                            </div>
+                            <div class="ai-analysis-reimagined" id="aiReimaginedDisplay">${this.formatText(analysis.reimaginacion)}</div>
+                            <textarea class="ai-analysis-reimagined-edit" id="aiReimaginedEdit" style="display: none;">${analysis.reimaginacion.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '')}</textarea>
+                            <div class="ai-reimagined-actions">
+                                <button class="ai-action-btn ai-copy-btn" onclick="aiAnalyzer.copyReimaginedText()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                    Copiar
+                                </button>
+                                <button class="ai-action-btn ai-edit-btn" id="aiEditBtn" onclick="aiAnalyzer.toggleEditMode()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                    Editar
+                                </button>
+                                <button class="ai-action-btn ai-use-btn" onclick="aiAnalyzer.useReimaginedAsMain('${entryId}')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Usar como principal
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        this.lastReimaginedText = analysis.reimaginacion;
+        this.currentEntryId = entryId;
+    }
+
+    // Modal SIMPLIFICADO para lectores
+    showReaderAnalysisModal(analysis) {
+        const modalHTML = `
+            <div class="ai-analysis-modal" id="aiAnalysisModal">
+                <div class="ai-analysis-content">
+                    <div class="ai-analysis-header">
+                        <h2>🧠 Análisis para Lectores</h2>
+                        <button class="ai-analysis-close" onclick="document.getElementById('aiAnalysisModal').remove()">×</button>
+                    </div>
+                    
+                    <div class="ai-analysis-body">
+                        <div class="ai-analysis-section">
+                            <div class="ai-analysis-section-title">
+                                <span class="ai-analysis-icon">📖</span>
+                                <span>Reflexión</span>
+                            </div>
+                            <div class="ai-analysis-text">${this.formatText(analysis.analisis)}</div>
+                        </div>
+                        
+                        <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px; font-size: 0.85rem; color: rgba(255, 255, 255, 0.6); line-height: 1.6;">
+                            💡 Este análisis fue generado por IA para ayudarte a explorar y reflexionar sobre el texto.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    formatText(text) {
+        return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    }
+
+    toggleEditMode() {
+        const display = document.getElementById('aiReimaginedDisplay');
+        const edit = document.getElementById('aiReimaginedEdit');
+        const editBtn = document.getElementById('aiEditBtn');
+        
+        if (!display || !edit || !editBtn) return;
+        
+        const isEditing = edit.style.display !== 'none';
+        
+        if (isEditing) {
+            const newText = edit.value;
+            this.lastReimaginedText = newText;
+            display.innerHTML = this.formatText(newText);
+            display.style.display = 'block';
+            edit.style.display = 'none';
+            editBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>Editar`;
+        } else {
+            display.style.display = 'none';
+            edit.style.display = 'block';
+            edit.focus();
+            editBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>Guardar`;
+        }
+    }
+
+    copyReimaginedText() {
+        const edit = document.getElementById('aiReimaginedEdit');
+        const isEditing = edit && edit.style.display !== 'none';
+        
+        const textToCopy = isEditing ? edit.value : this.lastReimaginedText.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '');
+        
+        if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const btn = document.querySelector('.ai-copy-btn');
+                if (btn) {
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = '<span style="color: var(--success);">✓ Copiado</span>';
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                    }, 2000);
+                }
+            });
+        }
+    }
+
+    async useReimaginedAsMain(entryId) {
+        try {
+            const entry = window.currentState?.entries?.find(e => String(e.id) === String(entryId));
+            if (!entry) {
+                console.error('Entrada no encontrada');
+                return;
+            }
+            
+            const edit = document.getElementById('aiReimaginedEdit');
+            const isEditing = edit && edit.style.display !== 'none';
+            const textToUse = isEditing ? edit.value : this.lastReimaginedText.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '');
+            
+            entry.text = textToUse;
+            entry.aiReimagined = true;
+            entry.wordCount = textToUse.split(/\s+/).filter(w => w.length > 0).length;
+            entry.charCount = textToUse.length;
+            
+            await window.storageManager.updateEntry(entry);
+            
+            const textDisplay = document.getElementById('entryTextDisplay');
+            if (textDisplay) {
+                textDisplay.textContent = textToUse;
+            }
+            
+            const wordCount = document.getElementById('entryWordCount');
+            const charCount = document.getElementById('entryCharCount');
+            if (wordCount) wordCount.textContent = `${entry.wordCount} palabras`;
+            if (charCount) charCount.textContent = `${entry.charCount} caracteres`;
+            
+            const brainBtn = document.querySelector(`[data-entry-id="${entryId}"] .ai-brain-btn`);
+            if (brainBtn && !brainBtn.querySelector('.ai-indicator')) {
+                brainBtn.innerHTML = '🧠<span class="ai-indicator"></span>';
+            }
+            
+            const modal = document.getElementById('aiAnalysisModal');
+            if (modal) modal.remove();
+            
+            const useBtn = document.querySelector('.ai-use-btn');
+            if (useBtn) {
+                const originalHTML = useBtn.innerHTML;
+                useBtn.innerHTML = '<span style="color: var(--success);">✓ Aplicado</span>';
+                useBtn.disabled = true;
+                setTimeout(() => {
+                    if (modal && modal.parentNode) {
+                        modal.remove();
+                    }
+                }, 1500);
+            }
+            
+        } catch (error) {
+            console.error('Error aplicando texto reimaginado:', error);
+            alert('Error al aplicar el texto. Intenta de nuevo.');
+        }
+    }
+}
+
+// Inicializar instancia global
+if (typeof window !== 'undefined') {
+    window.aiAnalyzer = new AIAnalyzer();
+    
+    // Función para analizar entrada propia (autores)
+    window.analyzeEntryWithAI = async function(entryId) {
+        try {
+            const entry = window.currentState?.entries?.find(e => String(e.id) === String(entryId));
+            if (!entry) {
+                console.error('Entrada no encontrada:', entryId);
+                return;
+            }
+            
+            const brainBtn = document.querySelector(`[data-entry-id="${entryId}"] .ai-brain-btn`);
+            if (brainBtn) {
+                brainBtn.disabled = true;
+                brainBtn.innerHTML = '<span class="ai-brain-loading">🧠</span>';
+            }
+            
+            const analysis = await window.aiAnalyzer.analyzeEntry(entry);
+            
+            window.aiAnalyzer.showAnalysisModal(analysis, entryId);
+            
+            if (brainBtn) {
+                brainBtn.disabled = false;
+                brainBtn.innerHTML = '🧠';
+            }
+            
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al analizar la entrada. Intenta de nuevo.');
+            
+            const brainBtn = document.querySelector(`[data-entry-id="${entryId}"] .ai-brain-btn`);
+            if (brainBtn) {
+                brainBtn.disabled = false;
+                brainBtn.innerHTML = '🧠';
+            }
+        }
+    };
+    
+    // Función para analizar entrada pública (lectores)
+    window.analyzePublicEntryForReader = async function(entryId) {
+        try {
+            if (!window.supabaseClient) {
+                alert('No se puede conectar a la base de datos');
+                return;
+            }
+            
+            const brainButtons = document.querySelectorAll('.ai-brain-btn');
+            brainButtons.forEach(btn => {
+                btn.disabled = true;
+                const originalHTML = btn.innerHTML;
+                btn.setAttribute('data-original-html', originalHTML);
+                btn.innerHTML = '<span class="ai-brain-loading">🧠</span>';
+            });
+            
+            const { data: entry, error } = await window.supabaseClient
+                .from('entries')
+                .select('*')
+                .eq('id', entryId)
+                .single();
+            
+            if (error) throw error;
+            
+            const analysis = await window.aiAnalyzer.analyzeEntryForReader(entry);
+            
+            window.aiAnalyzer.showReaderAnalysisModal(analysis);
+            
+            brainButtons.forEach(btn => {
+                btn.disabled = false;
+                const originalHTML = btn.getAttribute('data-original-html');
+                if (originalHTML) {
+                    btn.innerHTML = originalHTML;
+                    btn.removeAttribute('data-original-html');
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al analizar la entrada. Intenta de nuevo.');
+            
+            const brainButtons = document.querySelectorAll('.ai-brain-btn');
+            brainButtons.forEach(btn => {
+                btn.disabled = false;
+                const originalHTML = btn.getAttribute('data-original-html');
+                if (originalHTML) {
+                    btn.innerHTML = originalHTML;
+                    btn.removeAttribute('data-original-html');
+                }
+            });
+        }
+    };
+}
