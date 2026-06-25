@@ -8,12 +8,9 @@
 // ============================================
 class GroqAI {
     constructor() {
-        // Usar backend proxy en producción, API directa en desarrollo
-        this.isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-        this.apiKey = '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'; // Solo para desarrollo local
-        this.baseUrl = this.isProduction 
-            ? '/.netlify/functions/groq-proxy'  // Backend proxy en producción
-            : 'https://api.groq.com/openai/v1/chat/completions'; // API directa en local
+        // Siempre usar API directa de Groq
+        this.apiKey = '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';
+        this.baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
         this.model = 'llama-3.3-70b-versatile';
         this.cache = new Map();
     }
@@ -24,18 +21,12 @@ class GroqAI {
         try {
             console.log('🤖 Consultando Groq AI...');
             
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-            
-            // Solo agregar Authorization en desarrollo (llamada directa a Groq)
-            if (!this.isProduction) {
-                headers['Authorization'] = `Bearer ${this.apiKey}`;
-            }
-            
             const response = await fetch(this.baseUrl, {
                 method: 'POST',
-                headers,
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     model: this.model,
                     messages: [
