@@ -466,6 +466,16 @@ class CirclesManager {
             throw new Error('Ya hay un ejercicio activo en este círculo');
         }
 
+        // ========================================
+        // 📸 CAPTURAR IMAGEN A CLOUDINARY (si es de API externa)
+        // ========================================
+        let imageToSave = image;
+        
+        if (image && window.imageCaptureCloudinary) {
+            console.log('📸 Verificando si imagen del ejercicio necesita captura a Cloudinary...');
+            imageToSave = await window.imageCaptureCloudinary.captureAndUpdateImageData(image, this.currentUserId);
+        }
+
         // Crear nuevo ejercicio con deadline configurable
         const deadline = new Date();
         deadline.setHours(deadline.getHours() + deadlineHours);
@@ -476,7 +486,7 @@ class CirclesManager {
                 circle_id: circleId,
                 proposed_by_user_id: this.currentUserId,
                 proposed_by_username: this.currentUsername,
-                image,
+                image: imageToSave,
                 status: 'active',
                 deadline: deadline.toISOString()
             }])

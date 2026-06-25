@@ -1055,13 +1055,27 @@ async function saveEntry() {
         // Verificar si hay resonancia pendiente
         const resonanceOf = await checkResonanceBeforeSave();
         
+        // ========================================
+        // 📸 CAPTURAR IMAGEN A CLOUDINARY (si es de API externa)
+        // ========================================
+        let imageData = window.videoManager?.isVideoMode ? window.videoManager.getCurrentVideoData() : currentState.imageData;
+        
+        // Solo capturar imágenes (no videos)
+        if (imageData && !window.videoManager?.isVideoMode && window.imageCaptureCloudinary) {
+            const user = getCurrentUser();
+            if (user) {
+                console.log('📸 Verificando si imagen necesita captura a Cloudinary...');
+                imageData = await window.imageCaptureCloudinary.captureAndUpdateImageData(imageData, user.id);
+            }
+        }
+        
         entry = {
             id: Date.now(),
             date: getLocalISOString(),
             mood: currentState.mood,
             title: currentState.title.trim() || null,
             text: currentState.text.trim(),
-            image: window.videoManager?.isVideoMode ? window.videoManager.getCurrentVideoData() : currentState.imageData,
+            image: imageData,
             wordCount: currentState.text.trim().split(/\s+/).length,
             charCount: currentState.text.length,
             isPublic: false,
@@ -1618,7 +1632,22 @@ function viewEntry(entryId, source = 'archive') {
                     <div class="entry-stats">
                         <span id="entryWordCount">${entry.wordCount} palabras</span>
                         <span id="entryCharCount">${entry.charCount} caracteres</span>
-                        ${entry.writingSeconds ? `<span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25);">Tiempo: ${window.formatTime(entry.writingSeconds)}</span>` : ''}
+                        ${entry.wordCount >= 50 ? (entry.writingSeconds ? `
+                            <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25); display: inline-flex; align-items: center; gap: 0.5rem;">
+                                Tiempo: ${window.formatTime(entry.writingSeconds)}
+                                <button class="ai-brain-btn" onclick="analyzeEntryWithAI('${entry.id}')" title="Análisis IA" aria-label="Análisis IA">
+                                    🧠${entry.aiReimagined ? '<span class="ai-indicator"></span>' : ''}
+                                </button>
+                            </span>
+                        ` : `
+                            <button class="ai-brain-btn" onclick="analyzeEntryWithAI('${entry.id}')" title="Análisis IA" aria-label="Análisis IA" style="margin-left: 0;">
+                                🧠${entry.aiReimagined ? '<span class="ai-indicator"></span>' : ''}
+                            </button>
+                        `) : (entry.writingSeconds ? `
+                            <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25);">
+                                Tiempo: ${window.formatTime(entry.writingSeconds)}
+                            </span>
+                        ` : '')}
                         <span id="archiveEntryFavoriteCount" style="display: none; color: var(--accent); align-items: center; gap: 0.25rem;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>

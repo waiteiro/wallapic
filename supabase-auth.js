@@ -1325,6 +1325,22 @@ function renderEntryContent(entry, isFavorite, favoriteCount, container) {
                     <div class="entry-stats">
                         <span>${entry.word_count} palabras</span>
                         <span>${entry.char_count} caracteres</span>
+                        ${entry.word_count >= 50 ? (entry.writing_seconds ? `
+                            <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25); display: inline-flex; align-items: center; gap: 0.5rem;">
+                                Tiempo: ${window.formatTime(entry.writing_seconds)}
+                                <button class="ai-brain-btn" onclick="analyzePublicEntryForReader('${entry.id}')" title="Análisis IA para lectores" aria-label="Análisis IA">
+                                    🧠${entry.ai_reimagined ? '<span class="ai-indicator"></span>' : ''}
+                                </button>
+                            </span>
+                        ` : `
+                            <button class="ai-brain-btn" onclick="analyzePublicEntryForReader('${entry.id}')" title="Análisis IA para lectores" aria-label="Análisis IA" style="margin-left: 0;">
+                                🧠${entry.ai_reimagined ? '<span class="ai-indicator"></span>' : ''}
+                            </button>
+                        `) : (entry.writing_seconds ? `
+                            <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25);">
+                                Tiempo: ${window.formatTime(entry.writing_seconds)}
+                            </span>
+                        ` : '')}
                         ${favoriteCount > 0 ? `<span id="entryFavoriteCount" style="color: var(--accent); display: flex; align-items: center; gap: 0.25rem;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
