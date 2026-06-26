@@ -1325,22 +1325,11 @@ function renderEntryContent(entry, isFavorite, favoriteCount, container) {
                     <div class="entry-stats">
                         <span>${entry.word_count} palabras</span>
                         <span>${entry.char_count} caracteres</span>
-                        ${entry.word_count >= 50 ? (entry.writing_seconds ? `
-                            <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25); display: inline-flex; align-items: center; gap: 0.5rem;">
-                                Tiempo: ${window.formatTime(entry.writing_seconds)}
-                                <button class="ai-brain-btn" onclick="analyzePublicEntryForReader('${entry.id}')" title="Análisis IA para lectores" aria-label="Análisis IA">
-                                    🧠${entry.ai_reimagined ? '<span class="ai-indicator"></span>' : ''}
-                                </button>
-                            </span>
-                        ` : `
-                            <button class="ai-brain-btn" onclick="analyzePublicEntryForReader('${entry.id}')" title="Análisis IA para lectores" aria-label="Análisis IA" style="margin-left: 0;">
-                                🧠${entry.ai_reimagined ? '<span class="ai-indicator"></span>' : ''}
-                            </button>
-                        `) : (entry.writing_seconds ? `
+                        ${entry.writing_seconds ? `
                             <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25);">
                                 Tiempo: ${window.formatTime(entry.writing_seconds)}
                             </span>
-                        ` : '')}
+                        ` : ''}
                         ${favoriteCount > 0 ? `<span id="entryFavoriteCount" style="color: var(--accent); display: flex; align-items: center; gap: 0.25rem;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
@@ -1350,7 +1339,10 @@ function renderEntryContent(entry, isFavorite, favoriteCount, container) {
                     </div>
                     ${entry.image && entry.image.photographer !== 'Demo' && entry.image.source !== 'user_bank' ? `
                         <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
-                            Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>
+                            ${entry.image.source === 'cloudinary_custom' || entry.image.sourceName === 'Colección Personal' ? 
+                                '<span style="color: rgba(255, 255, 255, 0.4);">Colección exclusiva</span>' :
+                                `Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>`
+                            }
                         </div>
                     ` : ''}
                     <div id="echoesSection-${entry.id}" class="echoes-section" style="display: none; padding-top: 1.5rem;">
@@ -1358,6 +1350,11 @@ function renderEntryContent(entry, isFavorite, favoriteCount, container) {
                     </div>
                 </div>
                 <div class="entry-actions">
+                    ${entry.word_count >= 50 ? `
+                        <button class="btn-analyze-ai" onclick="analyzePublicEntryForReader('${entry.id}')" title="Análisis IA para lectores">
+                            🧠${entry.ai_reimagined ? '<span class="ai-indicator"></span>' : ''}
+                        </button>
+                    ` : ''}
                     <button class="btn-share" onclick="shareEntry('${entry.id}')" title="Compartir">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="18" cy="5" r="3"></circle>

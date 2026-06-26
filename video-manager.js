@@ -255,24 +255,28 @@ const videoManager = {
             // Tema aleatorio
             const randomTheme = this.videoThemes[Math.floor(Math.random() * this.videoThemes.length)];
             
-            // Rotar entre Pexels y Pixabay aleatoriamente
-            const videoSources = ['pexels', 'pixabay'];
+            // Rotar entre Cloudinary Custom, Pexels y Pixabay (33% cada uno)
+            const videoSources = ['cloudinary_custom', 'pexels', 'pixabay'];
             const selectedSource = videoSources[Math.floor(Math.random() * videoSources.length)];
             
             console.log(`🎬 Buscando video de ${selectedSource}: ${randomTheme}`);
 
             let videoData;
             
-            if (selectedSource === 'pexels') {
+            if (selectedSource === 'cloudinary_custom') {
+                videoData = await this.loadVideoFromCloudinaryCustom();
+            } else if (selectedSource === 'pexels') {
                 videoData = await this.loadVideoFromPexels(randomTheme);
             } else {
                 videoData = await this.loadVideoFromPixabay(randomTheme);
             }
             
             if (!videoData) {
-                // Fallback: si falla uno, intentar con el otro
+                // Fallback
                 console.log(`⚠️ No se encontró video en ${selectedSource}, intentando con otro servicio...`);
-                if (selectedSource === 'pexels') {
+                if (selectedSource === 'cloudinary_custom') {
+                    videoData = await this.loadVideoFromPexels(randomTheme);
+                } else if (selectedSource === 'pexels') {
                     videoData = await this.loadVideoFromPixabay(randomTheme);
                 } else {
                     videoData = await this.loadVideoFromPexels(randomTheme);
@@ -386,6 +390,50 @@ const videoManager = {
         }
     },
 
+    async loadVideoFromCloudinaryCustom() {
+        try {
+            console.log('🎨 Cargando video desde Colección Personal (Cloudinary Custom)...');
+            
+            const cloudName = window.CLOUDINARY_CUSTOM_CLOUD_NAME || 'dg9ntkcug';
+            
+            // Usar el tag 'wallapic' para listar videos
+            const response = await fetch(
+                `https://res.cloudinary.com/${cloudName}/video/list/wallapic.json`
+            );
+            
+            if (!response.ok) {
+                console.error('❌ Error al cargar lista de videos:', response.status);
+                throw new Error('Error en Cloudinary Custom videos');
+            }
+
+            const data = await response.json();
+            
+            if (!data.resources || data.resources.length === 0) {
+                console.warn('⚠️ No hay videos con tag wallapic');
+                throw new Error('No hay videos en la colección personal');
+            }
+            
+            console.log(`✅ ${data.resources.length} videos disponibles en Colección Personal`);
+            
+            const randomVideo = data.resources[Math.floor(Math.random() * data.resources.length)];
+            
+            return {
+                id: `cloudinary-custom-${randomVideo.public_id.replace(/\//g, '-')}`,
+                url: `https://res.cloudinary.com/${cloudName}/video/upload/${randomVideo.public_id}.${randomVideo.format}`,
+                width: 1920,
+                height: 1080,
+                user: 'Colección Personal',
+                userUrl: '#',
+                videoUrl: `https://res.cloudinary.com/${cloudName}/video/upload/${randomVideo.public_id}.${randomVideo.format}`,
+                theme: 'personal',
+                source: 'Colección Personal'
+            };
+        } catch (error) {
+            console.error('❌ Error con Cloudinary Custom videos:', error);
+            return null;
+        }
+    },
+
     // Cargar video desde Pixabay
     async loadVideoFromPixabay(theme) {
         try {
@@ -432,10 +480,16 @@ const videoManager = {
         
         if (creditText && this.currentVideo) {
             const source = this.currentVideo.source || 'Pexels';
-            creditText.innerHTML = `
-                Video de <a href="${this.currentVideo.userUrl}" target="_blank" rel="noopener">${this.currentVideo.user}</a> 
-                en <a href="${this.currentVideo.videoUrl}" target="_blank" rel="noopener">${source}</a>
-            `;
+            
+            // Si es de Colección Personal, mostrar texto elegante
+            if (source === 'Colección Personal') {
+                creditText.innerHTML = `<span style="color: rgba(255, 255, 255, 0.4);">Colección exclusiva</span>`;
+            } else {
+                creditText.innerHTML = `
+                    Video de <a href="${this.currentVideo.userUrl}" target="_blank" rel="noopener">${this.currentVideo.user}</a> 
+                    en <a href="${this.currentVideo.videoUrl}" target="_blank" rel="noopener">${source}</a>
+                `;
+            }
         }
     },
 

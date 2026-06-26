@@ -1233,6 +1233,9 @@ class ImageBankUI {
                 } else if (img.source === 'Wikimedia Commons') {
                     sourceIcon = '📚';
                     sourceLabel = 'Wikimedia';
+                } else if (img.source === 'Colección Personal' || img.source === 'cloudinary_custom') {
+                    sourceIcon = '⭐';
+                    sourceLabel = 'Colección Personal';
                 } else {
                     sourceIcon = '🖼️';
                     sourceLabel = img.source || 'Externa';

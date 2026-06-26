@@ -3,11 +3,22 @@ const PEXELS_API_KEY = 'PZqacS9s22YzIhcq2gOnnnpW3b0GEHYMRCYn6uFHC88emGMpAl1QtRKN
 const UNSPLASH_ACCESS_KEY = 'gGr37vwsEOoqo6jw4yFAcQnl4ikG5MRxRzhvffqMToE';
 const PIXABAY_API_KEY = '35815997-2fc59b57aae26c1087246893b';
 
+// Cloudinary Custom - Colección personal
+const CLOUDINARY_CUSTOM_CLOUD_NAME = 'dg9ntkcug';
+const CLOUDINARY_CUSTOM_API_KEY = '447441112199792';
+const CLOUDINARY_CUSTOM_API_SECRET = 'd0CozOLd7E4TT1AmXDXekj7eIoI';
+const CLOUDINARY_CUSTOM_FOLDER_IMAGES = 'Home/all';
+const CLOUDINARY_CUSTOM_FOLDER_VIDEOS = 'Home/videos';
+
 // Exportar globalmente para video-manager
 window.PEXELS_API_KEY = PEXELS_API_KEY;
+window.CLOUDINARY_CUSTOM_CLOUD_NAME = CLOUDINARY_CUSTOM_CLOUD_NAME;
+window.CLOUDINARY_CUSTOM_API_KEY = CLOUDINARY_CUSTOM_API_KEY;
+window.CLOUDINARY_CUSTOM_API_SECRET = CLOUDINARY_CUSTOM_API_SECRET;
+window.CLOUDINARY_CUSTOM_FOLDER_VIDEOS = CLOUDINARY_CUSTOM_FOLDER_VIDEOS;
 
-// Distribución: 33% Comunidad, ~17% cada API externa (Unsplash, Pexels, Pixabay, Wikimedia)
-const IMAGE_SOURCES = ['unsplash', 'pexels', 'pixabay', 'wikimedia', 'shared', 'shared'];
+// Distribución: 20% Custom, 20% Comunidad, 15% cada API externa (Unsplash, Pexels, Pixabay, Wikimedia)
+const IMAGE_SOURCES = ['cloudinary_custom', 'unsplash', 'pexels', 'pixabay', 'wikimedia', 'shared'];
 let currentSourceIndex = 0;
 
 // Caché de imágenes compartidas vistas HOY (se limpia diariamente)
@@ -439,7 +450,14 @@ async function loadRandomImage() {
     try {
         let imageData;
         
-        if (source === 'unsplash') {
+        if (source === 'cloudinary_custom') {
+            imageData = await loadFromCloudinaryCustom();
+            // Si falla cloudinary custom, usar Pexels como fallback inmediato
+            if (!imageData) {
+                console.log('⚠️ Cloudinary Custom falló, usando Pexels como fallback');
+                imageData = await loadFromPexels(theme);
+            }
+        } else if (source === 'unsplash') {
             imageData = await loadFromUnsplash(theme);
         } else if (source === 'pexels') {
             imageData = await loadFromPexels(theme);
@@ -539,6 +557,49 @@ async function loadFromPexels(theme) {
         };
     } catch (error) {
         console.error('Error con Pexels:', error);
+        return null;
+    }
+}
+
+// Cargar desde Cloudinary Custom - Colección personal
+async function loadFromCloudinaryCustom() {
+    try {
+        console.log('🎨 Cargando desde Colección Personal (Cloudinary Custom)...');
+        
+        // Usar el tag/preset 'wallapic' para listar imágenes
+        const response = await fetch(
+            `https://res.cloudinary.com/${CLOUDINARY_CUSTOM_CLOUD_NAME}/image/list/wallapic.json`
+        );
+        
+        if (!response.ok) {
+            console.error('❌ Error al cargar lista:', response.status);
+            throw new Error('Error en Cloudinary Custom');
+        }
+
+        const data = await response.json();
+        
+        if (!data.resources || data.resources.length === 0) {
+            console.warn('⚠️ No hay imágenes con tag wallapic');
+            throw new Error('No hay imágenes en la colección personal');
+        }
+        
+        console.log(`✅ ${data.resources.length} imágenes disponibles en Colección Personal`);
+        
+        // Seleccionar una imagen aleatoria
+        const randomImage = data.resources[Math.floor(Math.random() * data.resources.length)];
+        
+        return {
+            url: `https://res.cloudinary.com/${CLOUDINARY_CUSTOM_CLOUD_NAME}/image/upload/${randomImage.public_id}.${randomImage.format}`,
+            thumbnail: `https://res.cloudinary.com/${CLOUDINARY_CUSTOM_CLOUD_NAME}/image/upload/w_400,q_auto,f_auto/${randomImage.public_id}.${randomImage.format}`,
+            photographer: 'Colección Personal',
+            photographerUrl: '#',
+            sourceUrl: '#',
+            sourceName: 'Colección Personal',
+            source: 'cloudinary_custom',
+            alt: 'Imagen de colección personal'
+        };
+    } catch (error) {
+        console.error('❌ Error con Cloudinary Custom:', error);
         return null;
     }
 }
@@ -734,10 +795,15 @@ function loadImageWithCredit(imageData) {
     // Mostrar crédito
     const creditTextDiv = elements.imageCredit.querySelector('.image-credit-text');
     if (imageData.photographer !== 'Demo') {
-        creditTextDiv.innerHTML = `
-            Foto por <a href="${imageData.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener">${imageData.photographer}</a> 
-            en <a href="${imageData.sourceUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener">${imageData.sourceName}</a>
-        `;
+        // Si es de Colección Personal, mostrar texto elegante
+        if (imageData.source === 'cloudinary_custom' || imageData.sourceName === 'Colección Personal') {
+            creditTextDiv.innerHTML = `<span style="color: rgba(255, 255, 255, 0.4);">Colección exclusiva</span>`;
+        } else {
+            creditTextDiv.innerHTML = `
+                Foto por <a href="${imageData.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener">${imageData.photographer}</a> 
+                en <a href="${imageData.sourceUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener">${imageData.sourceName}</a>
+            `;
+        }
     } else {
         creditTextDiv.innerHTML = '';
     }
@@ -1633,12 +1699,12 @@ function viewEntry(entryId, source = 'archive') {
                         <span id="entryWordCount">${entry.wordCount} palabras</span>
                         <span id="entryCharCount">${entry.charCount} caracteres</span>
                         ${entry.wordCount >= 50 ? (entry.writingSeconds ? `
-                            <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25); display: inline-flex; align-items: center; gap: 0.5rem;">
+                            <span class="entry-writing-time" style="color: rgba(255, 255, 255, 0.25);">
                                 Tiempo: ${window.formatTime(entry.writingSeconds)}
-                                <button class="ai-brain-btn" onclick="analyzeEntryWithAI('${entry.id}')" title="Análisis IA" aria-label="Análisis IA">
-                                    🧠${entry.aiReimagined ? '<span class="ai-indicator"></span>' : ''}
-                                </button>
                             </span>
+                            <button class="ai-brain-btn" onclick="analyzeEntryWithAI('${entry.id}')" title="Análisis IA" aria-label="Análisis IA">
+                                🧠${entry.aiReimagined ? '<span class="ai-indicator"></span>' : ''}
+                            </button>
                         ` : `
                             <button class="ai-brain-btn" onclick="analyzeEntryWithAI('${entry.id}')" title="Análisis IA" aria-label="Análisis IA" style="margin-left: 0;">
                                 🧠${entry.aiReimagined ? '<span class="ai-indicator"></span>' : ''}
@@ -1657,7 +1723,10 @@ function viewEntry(entryId, source = 'archive') {
                     </div>
                     ${entry.image.photographer !== 'Demo' && entry.image.source !== 'user_bank' ? `
                         <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5); padding-top: 1.5rem;">
-                            Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>
+                            ${entry.image.source === 'cloudinary_custom' || entry.image.sourceName === 'Colección Personal' ? 
+                                '<span style="color: rgba(255, 255, 255, 0.4);">Colección exclusiva</span>' :
+                                `Foto por <a href="${entry.image.photographerUrl}?utm_source=wallapic&utm_medium=referral" target="_blank" rel="noopener" style="color: var(--accent);">${entry.image.photographer}</a>`
+                            }
                         </div>
                     ` : ''}
                 </div>

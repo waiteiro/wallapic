@@ -18,6 +18,12 @@ class ImageCaptureCloudinary {
     isExternalAPIImage(imageUrl) {
         if (!imageUrl || typeof imageUrl !== 'string') return false;
 
+        // Si es de Cloudinary Custom (dg9ntkcug), NO capturar
+        if (imageUrl.includes('dg9ntkcug')) {
+            console.log('✅ Imagen de Cloudinary Custom - NO se capturará');
+            return false;
+        }
+
         const externalAPIs = [
             { pattern: 'images.pexels.com', name: 'Pexels' },
             { pattern: 'images.unsplash.com', name: 'Unsplash' },
